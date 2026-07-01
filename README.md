@@ -1,7 +1,7 @@
 # setup do Projeto
 
 - [x] Setup do banco
-- [] seeding do banco (colocar dados)
+- [x] seeding do banco (colocar dados)
 - [] Introdução ao Next.js
 - [] Tailwind e shadcn
 - [] Git hooks
