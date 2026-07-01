@@ -1,5 +1,7 @@
+import { Button } from "@base-ui/react";
+
 const Home = () => {
-  return <button>test</button>;
+  return <Button>test</Button>;
 };
 
 export default Home;
