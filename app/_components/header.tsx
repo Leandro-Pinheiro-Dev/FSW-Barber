@@ -10,8 +10,8 @@ const Header = () => {
         <Image
           alt="SpaçoVip"
           src="/LOGO_Spacovip.jpeg"
-          height={18}
-          width={120}
+          height={150}
+          width={150}
         />
         <Button size="icon" variant="outline">
           <MenuIcon />

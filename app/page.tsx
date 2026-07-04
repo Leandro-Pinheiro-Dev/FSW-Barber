@@ -2,59 +2,92 @@ import Header from "./_components/header";
 import { Input } from "./_components/ui/input";
 import { Button } from "./_components/ui/button";
 import { SearchIcon } from "lucide-react";
-import { Badge } from "./_components/ui/badge";
 import Image from "next/image";
 import { Card, CardContent } from "./_components/ui/card";
+import { Badge } from "./_components/ui/badge";
 import { Avatar, AvatarImage } from "./_components/ui/avatar";
+import { db } from "@/lib/prisma";
+import BarbershopItem from "./_components/barbershop-item";
 
-const Home = () => {
+const Home = async () => {
+  const barbershops = await db.barbershop.findMany();
+
   return (
-    <div>
-      {/*header*/}
-      <Header />
-      <div className="p-5">
-        {/*TEXTO*/}
-        <h2 className="text-xl font-bold"> Olá, Cliente! </h2>
-        <p>Quinta-Feira, 02 de Julho.</p>
-        {/*BUSCA*/}
-        <div className="flex items-center gap-2 mt-6">
-          <Input placeholder="Faça Sua Busca.."></Input>
-          <Button>
-            <SearchIcon />
-          </Button>
-        </div>
-        {/*IMAGEM*/}
-        <div className="relative w-full h-44 mt-6 ">
-          <Image
-            src="/banner4.jpeg"
-            alt="Banner da barbearia"
-            fill
-            className="rounded-xl object-cover"
-          />
-        </div>
-        {/*AGENDAMENTO*/}
-        <Card className="mt-6">
-          <CardContent className="flex justify-between p-0">
-            {/*ESQUERDA*/}
-            <div className="flex flex-col gap-2 py-5 pl-5">
-              <Badge className="w-fit"> Confirmado </Badge>
-              <h3 className="font-semibold">Corte de cabelo</h3>
+    <div className="min-h-screen flex justify-center">
+      <div className="w-full max-w-5xl">
+        <Header />
 
-              <div className="flex items-center gap-2">
-                <Avatar className="h-6 m-6">
-                  <AvatarImage src="https://utfs.io/f/c97a2dc9-cf62-468b-a851-bfd2bdde775f-16p.png" />
-                </Avatar>
-                <p className="text-sm">Barbearia SpaçoVip</p>
-              </div>
+        <div className="p-5 space-y-6">
+          {/* BOAS-VINDAS */}
+          <div>
+            <h2 className="text-xl font-bold">Olá, Cliente!</h2>
+            <p className="text-sm text-muted-foreground">
+              Quinta-Feira, 02 de Julho.
+            </p>
+          </div>
+
+          {/* BUSCA */}
+          <div className="flex items-center gap-2">
+            <Input placeholder="Faça sua busca..." />
+            <Button>
+              <SearchIcon />
+            </Button>
+          </div>
+          {/* BANNER */}
+          <div className="relative w-full h-120 overflow-hidden">
+            <Image
+              src="/banner4.jpeg"
+              alt="Banner da barbearia"
+              fill
+              className="object-cover"
+            />
+          </div>
+          {/* AGENDAMENTO */}
+          <div>
+            <h2 className="mb-3 text-xs font-bold uppercase text-muted-foreground">
+              Agendamentos
+            </h2>
+
+            <Card>
+              <CardContent className="flex justify-between p-0">
+                {/* ESQUERDA */}
+                <div className="flex flex-col gap-2 py-5 pl-5">
+                  <Badge className="w-fit">Confirmado</Badge>
+
+                  <h3 className="font-semibold">Corte de cabelo</h3>
+
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-6 w-6">
+                      <AvatarImage src="https://utfs.io/f/c97a2dc9-cf62-468b-a851-bfd2bdde775f-16p.png" />
+                    </Avatar>
+
+                    <p className="text-sm">Barbearia SpaçoVip</p>
+                  </div>
+                </div>
+
+                {/* DIREITA */}
+                <div className="flex flex-col items-center justify-center px-5 border-l">
+                  <p className="text-sm">Ago</p>
+                  <p className="text-2xl font-bold">03</p>
+                  <p className="text-sm">20h00</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* RECOMENDADOS */}
+          <div>
+            <h2 className="mb-3 text-xs font-bold uppercase text-muted-foreground">
+              Recomendados
+            </h2>
+
+            <div className="flex gap-4 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+              {barbershops.map((barbershop) => (
+                <BarbershopItem key={barbershop.id} barbershop={barbershop} />
+              ))}
             </div>
-            {/*DIREITA*/}
-            <div className="flex flex-col items-center justify-center px-5 border-l-2 border-solid">
-              <p className="text-sm">Agosto</p>
-              <p className="text-2xl">03</p>
-              <p className="text-sm">20h00</p>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );
