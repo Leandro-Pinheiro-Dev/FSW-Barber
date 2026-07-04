@@ -27,12 +27,48 @@ const Home = async () => {
           </div>
 
           {/* BUSCA */}
-          <div className="flex items-center gap-2">
+          <div className="mt-6 flex items-center gap-2 ">
             <Input placeholder="Faça sua busca..." />
             <Button>
               <SearchIcon />
             </Button>
           </div>
+
+          {/* BUSCAR RAPIDA */}
+          <div className=" mt-6 flex gap-3 overflow-x-scroll [&::-webkit-scrollbar]:hidden">
+            <Button className="gap-2 text-gray-600">
+              <Image
+                src="/tesoura-e-pente.png"
+                alt="Cabelo"
+                width={50}
+                height={50}
+              />
+              Cabelo
+            </Button>
+            <Button className="gap-2 text-gray-600">
+              <Image src="/barba.png" alt="Barba" width={50} height={50} />
+              Barba
+            </Button>
+            <Button className="gap-2 text-gray-600">
+              <Image
+                src="/variante-de-cabelo-masculino.png"
+                alt="Pézinho"
+                width={50}
+                height={50}
+              />
+              Pézinho
+            </Button>
+            <Button className="gap-2 text-gray-600">
+              <Image
+                src="/sobrancelha.png"
+                alt="sobrancelha"
+                width={50}
+                height={50}
+              />
+              Sobrancelha
+            </Button>
+          </div>
+
           {/* BANNER */}
           <div className="relative w-full h-120 overflow-hidden">
             <Image
@@ -86,6 +122,16 @@ const Home = async () => {
                 <BarbershopItem key={barbershop.id} barbershop={barbershop} />
               ))}
             </div>
+            <footer>
+              <Card className="mt-8">
+                <CardContent className="px-5 py-6">
+                  <p className="text-sm text-gray-400">
+                    © 2026 Copyright{" "}
+                    <span className="font-bold">FSW Barber</span>
+                  </p>
+                </CardContent>
+              </Card>
+            </footer>
           </div>
         </div>
       </div>
