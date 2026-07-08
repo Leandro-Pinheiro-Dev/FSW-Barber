@@ -21,28 +21,28 @@ async function seedDatabase() {
       {
         name: "Corte de Cabelo",
         description: "Estilo personalizado com as últimas tendências.",
-        price: 60.0,
+        price: 35.0,
         imageUrl:
           "https://utfs.io/f/0ddfbd26-a424-43a0-aaf3-c3f1dc6be6d1-1kgxo7.png",
       },
       {
         name: "Barba",
         description: "Modelagem completa para destacar sua masculinidade.",
-        price: 40.0,
+        price: 35.0,
         imageUrl:
           "https://utfs.io/f/e6bdffb6-24a9-455b-aba3-903c2c2b5bde-1jo6tu.png",
       },
       {
         name: "Pézinho",
         description: "Acabamento perfeito para um visual renovado.",
-        price: 35.0,
+        price: 10.0,
         imageUrl:
           "https://utfs.io/f/8a457cda-f768-411d-a737-cdb23ca6b9b5-b3pegf.png",
       },
       {
         name: "Sobrancelha",
         description: "Modelagem precisa para destacar o olhar.",
-        price: 20.0,
+        price: 8.0,
         imageUrl:
           "https://utfs.io/f/2118f76e-89e4-43e6-87c9-8f157500c333-b0ps0b.png",
       },

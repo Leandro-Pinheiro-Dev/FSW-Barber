@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Button } from "@/app/_components/ui/button";
 import { ChevronLeftIcon, MapPinIcon, MenuIcon, StarIcon } from "lucide-react";
 import Image from "next/image";
+import ServiceItem from "@/app/_components/service-item";
 
 interface BarbershopPageProps {
   params: Promise<{
@@ -20,6 +21,9 @@ const BarbershopPage = async ({ params }: BarbershopPageProps) => {
     where: {
       id,
     },
+    include: {
+      services: true,
+    },
   });
 
   if (!barbershop) {
@@ -29,7 +33,9 @@ const BarbershopPage = async ({ params }: BarbershopPageProps) => {
       </div>
     );
   }
-  console.log(barbershop.imageUrl);
+
+  console.log(barbershop.services);
+
   return (
     <div>
       {/*IMAGEM*/}
@@ -73,6 +79,17 @@ const BarbershopPage = async ({ params }: BarbershopPageProps) => {
       <div className="p-5 border-b border-solid space-y-3">
         <h2 className="font bold uppercase text-gray-400 text-xs">Sobre Nós</h2>
         <p className="text-sm text-justify">{barbershop?.description}</p>
+      </div>
+
+      <div className="space-y-3 p-5">
+        <h2 className="font bold uppercase text-gray-400 text-xs mb-3">
+          Serviços
+        </h2>
+        <div className="space-y-3">
+          {barbershop.services.map((service) => (
+            <ServiceItem key={service.id} service={service} />
+          ))}
+        </div>
       </div>
     </div>
   );
