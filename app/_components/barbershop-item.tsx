@@ -1,9 +1,10 @@
-import Image from "next/image";
 import { Barbershop } from "@prisma/client";
 import { Card, CardContent } from "./ui/card";
-import { Button } from "@base-ui/react";
-import { StarIcon } from "lucide-react";
+import Image from "next/image";
+import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
+import { StarIcon } from "lucide-react";
+import Link from "next/link";
 
 interface BarbershopItemProps {
   barbershop: Barbershop;
@@ -11,30 +12,33 @@ interface BarbershopItemProps {
 
 const BarbershopItem = ({ barbershop }: BarbershopItemProps) => {
   return (
-    <Card className="min-w-41.75 rounded-2xl">
-      <CardContent className="p-0 px-1 pb-3 pt-1">
+    <Card className="min-w- 40 rounded-2xl">
+      <CardContent className="p-0 px-1 pt-1">
         {/* IMAGEM */}
-        <div className="relative h-39.75 w-full">
+        <div className="relative h-44 w-full overflow-hidden rounded-xl">
           <Image
-            src={barbershop.imageUrl}
+            src="/rafa-2026.jpeg"
             alt={barbershop.name}
             fill
-            className="rounded-2xl object-cover"
+            sizes="200px"
+            className="object-cover"
           />
-          <Badge className="absolute left-2 top-2 bg-gray-500 space-x-2">
-            <StarIcon
-              size={12}
-              className="fill-primary text-primary bg-gray-500 "
-            />
-            <p className=" text-xs font-semibold text-white"> 5,0 </p>
+
+          <Badge
+            variant="secondary"
+            className="absolute left-2 top-2 flex items-center gap-1"
+          >
+            <StarIcon size={12} className="fill-primary text-primary" />
+            <span className="text-xs font-semibold">5,0</span>
           </Badge>
         </div>
+
         {/* TEXTO */}
-        <div className="px-1 py-3">
+        <div className="px-1 py-3 pb-3">
           <h3 className="truncate font-semibold">{barbershop.name}</h3>
-          <p className="truncate text-sm text-gray-400">{barbershop.address}</p>
-          <Button className="mt-3 w-full bg-gray-800 text-white py-2 rounded-md">
-            Reservar
+
+          <Button variant="secondary" className="mt-3 w-full">
+            <Link href={`/barbershops/${barbershop.id}`}>Reservar</Link>
           </Button>
         </div>
       </CardContent>
