@@ -12,7 +12,7 @@ async function seedDatabase() {
         imageUrl: "https://pt.pngtree.com/free-backgrounds-photos/barbearia",
         phones: ["(11) 99881-1533"],
         description:
-          "Com 20 anos de tradição, a Barbearia SpaçoVip une experiência, técnica e inovação para oferecer cortes modernos e serviços de alta qualidade. Nosso compromisso é proporcionar um atendimento em um ambiente  confortável e acolhedor, onde cada cliente recebe uma experiência única.",
+          "Com 20 anos de tradição, a Barbearia SpaçoVip une experiência, técnica e inovação para oferecer cortes modernos e serviços de alta qualidade.\n\nNosso compromisso é proporcionar um atendimento em um ambiente confortável e acolhedor, onde cada cliente recebe uma experiência única.",
       },
     });
 

@@ -3,7 +3,6 @@ import BookingItem from "./_components/booking-item";
 
 import { Input } from "./_components/ui/input";
 import { Button } from "./_components/ui/button";
-import { Card, CardContent } from "./_components/ui/card";
 
 import { quickSearchOptions } from "./_constants/search";
 
@@ -57,9 +56,9 @@ const Home = async () => {
           </div>
 
           {/* BANNER */}
-          <div className="relative h-120 w-full overflow-hidden rounded-2xl">
+          <div className="relative mx-auto h-120 w-full max-w-2x1 overflow-hidden rounded-2xl">
             <Image
-              src="/rafa-2026.jpeg"
+              src="/home.jpeg"
               alt="Banner da barbearia"
               fill
               className="object-contain"
@@ -119,17 +118,6 @@ const Home = async () => {
               <Button className="mt-4 w-full">Ver rota</Button>
             </a>
           </div>
-
-          {/* RODAPÉ */}
-          <footer>
-            <Card className="mt-8">
-              <CardContent className="px-5 py-6">
-                <p className="text-center text-sm text-gray-400">
-                  © 2026 <span className="font-bold">FSW Barber</span>
-                </p>
-              </CardContent>
-            </Card>
-          </footer>
         </div>
       </div>
     </div>
