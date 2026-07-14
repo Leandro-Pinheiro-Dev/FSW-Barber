@@ -6,6 +6,8 @@ import { ChevronLeftIcon, MapPinIcon, MenuIcon, StarIcon } from "lucide-react";
 import Image from "next/image";
 import ServiceItem from "@/app/_components/service-item";
 import PhoneItem from "@/app/_components/phone-item";
+import { Sheet, SheetTrigger } from "@/app/_components/ui/sheet";
+import SideBarSheet from "@/app/_components/sidebar-sheet";
 
 interface BarbershopPageProps {
   params: Promise<{
@@ -46,19 +48,21 @@ const BarbershopPage = async ({ params }: BarbershopPageProps) => {
           className="object-cover"
           unoptimized
         />
+        {/* TELA DE USUARIO*/}
+        <div className="absolute inset-x-4 top-4 z-10 flex justify-between">
+          <Sheet>
+            <SheetTrigger render={<Button size="icon" variant="secondary" />}>
+              <MenuIcon size={20} />
+            </SheetTrigger>
 
-        <div className="absolute left-4 top-4">
+            <SideBarSheet />
+          </Sheet>
+
           <Link href="/">
             <Button size="icon" variant="secondary">
-              <ChevronLeftIcon />
+              <ChevronLeftIcon size={20} />
             </Button>
           </Link>
-        </div>
-
-        <div className="absolute right-4 top-4">
-          <Button size="icon" variant="secondary">
-            <MenuIcon />
-          </Button>
         </div>
       </div>
 
