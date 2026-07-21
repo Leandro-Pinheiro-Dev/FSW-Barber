@@ -17,11 +17,13 @@ import {
 } from "./ui/dialog";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import { useRouter } from "next/navigation";
 
 const SideBarSheet = () => {
   const { data } = useSession();
   const handleLoginWithGoogleClick = () => signIn("google");
   const handleLogoutClick = () => signOut();
+  const router = useRouter();
   return (
     <SheetContent>
       <SheetHeader className="mt-8">
@@ -117,14 +119,15 @@ const SideBarSheet = () => {
         {quickSearchOptions.map((option) => (
           <Button
             key={option.title}
-            className=" justify-start gap-2 "
             variant="ghost"
+            className="justify-start gap-2"
+            onClick={() => router.push(`/barbershops?search=${option.title}`)}
           >
             <Image
               alt={option.title}
               src={option.imageUrl}
-              height={18}
               width={18}
+              height={18}
             />
             {option.title}
           </Button>

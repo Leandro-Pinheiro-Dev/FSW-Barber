@@ -8,6 +8,7 @@ import ServiceItem from "@/app/_components/service-item";
 import PhoneItem from "@/app/_components/phone-item";
 import { Sheet, SheetTrigger } from "@/app/_components/ui/sheet";
 import SideBarSheet from "@/app/_components/sidebar-sheet";
+import ScrollToResult from "@/app/_components/scroll-to-result";
 
 interface BarbershopPageProps {
   params: Promise<{
@@ -132,23 +133,7 @@ const BarbershopPage = async ({
       </div>
 
       {/* Scroll automático */}
-      {search && (
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              window.addEventListener("load", () => {
-                const el = document.getElementById("resultado");
-                if (el) {
-                  el.scrollIntoView({
-                    behavior: "smooth",
-                    block: "center"
-                  });
-                }
-              });
-            `,
-          }}
-        />
-      )}
+      {search && <ScrollToResult />}
     </div>
   );
 };
