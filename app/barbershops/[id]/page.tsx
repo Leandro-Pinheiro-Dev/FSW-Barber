@@ -13,12 +13,18 @@ interface BarbershopPageProps {
   params: Promise<{
     id: string;
   }>;
+
+  searchParams: Promise<{
+    search?: string;
+  }>;
 }
 
-//CHAMAR BANCO DE DADOS
-
-const BarbershopPage = async ({ params }: BarbershopPageProps) => {
+const BarbershopPage = async ({
+  params,
+  searchParams,
+}: BarbershopPageProps) => {
   const { id } = await params;
+  const { search = "" } = await searchParams;
 
   const barbershop = await db.barbershop.findUnique({
     where: {
@@ -39,7 +45,7 @@ const BarbershopPage = async ({ params }: BarbershopPageProps) => {
 
   return (
     <div className="mx-auto w-full max-w-5xl">
-      {/*IMAGEM*/}
+      {/* IMAGEM */}
       <div className="relative h-120 w-full overflow-hidden rounded-2xl">
         <Image
           src="/detalhes.jpeg"
@@ -48,7 +54,7 @@ const BarbershopPage = async ({ params }: BarbershopPageProps) => {
           className="object-cover"
           unoptimized
         />
-        {/* TELA DE USUARIO*/}
+
         <div className="absolute inset-x-4 top-4 z-10 flex justify-between">
           <Sheet>
             <SheetTrigger render={<Button size="icon" variant="secondary" />}>
@@ -66,45 +72,83 @@ const BarbershopPage = async ({ params }: BarbershopPageProps) => {
         </div>
       </div>
 
-      {/*TITULO*/}
-      <div className="border-b border-solid p-5 pt-8">
+      {/* TÍTULO */}
+      <div className="border-b p-5 pt-8">
         <h1 className="mb-3 mt-2 text-xl font-bold">{barbershop.name}</h1>
+
         <div className="mb-2 flex items-center gap-2">
           <MapPinIcon className="text-primary" size={18} />
-          <p className="text-sm">{barbershop?.address}</p>
+          <p className="text-sm">{barbershop.address}</p>
         </div>
 
         <div className="flex items-center gap-2">
           <StarIcon className="fill-primary text-primary" size={18} />
-          <p className="text-sm">5,0 (80 Avaliações)</p>
+          <p className="text-sm">5,0 (80 avaliações)</p>
         </div>
       </div>
 
-      {/*DESCRIÇÃO*/}
-      <div className="p-5 border-b border-solid space-y-3">
-        <h2 className="font bold uppercase text-gray-400 text-xs">Sobre Nós</h2>
-        <p className="w-[500px]text-sm text-justify">
-          {barbershop?.description}
-        </p>
+      {/* DESCRIÇÃO */}
+      <div className="space-y-3 border-b p-5">
+        <h2 className="text-xs font-bold uppercase text-gray-400">Sobre Nós</h2>
+
+        <p className="text-sm text-justify">{barbershop.description}</p>
       </div>
-      {/*SERVIÇOS*/}
-      <div className="space-y-3 border-b border-solid p-5">
-        <h2 className="font bold uppercase text-gray-400 text-xs mb-3">
+
+      {/* SERVIÇOS */}
+      <div className="space-y-3 border-b p-5">
+        <h2 className="mb-3 text-xs font-bold uppercase text-gray-400">
           Serviços
         </h2>
+
         <div className="space-y-3">
-          {barbershop.services.map((service) => (
-            <ServiceItem key={service.id} service={service} />
-          ))}
+          {barbershop.services.map((service) => {
+            const match =
+              search &&
+              (service.name.toLowerCase().includes(search.toLowerCase()) ||
+                service.description
+                  .toLowerCase()
+                  .includes(search.toLowerCase()));
+
+            return (
+              <div
+                key={service.id}
+                id={match ? "resultado" : undefined}
+                className={
+                  match ? "rounded-xl border-2 border-primary p-2" : undefined
+                }
+              >
+                <ServiceItem service={service} />
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/*CONTATO*/}
+      {/* CONTATO */}
       <div className="space-y-3 p-5">
         {barbershop.phones.map((phone) => (
           <PhoneItem key={phone} phone={phone} />
         ))}
       </div>
+
+      {/* Scroll automático */}
+      {search && (
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.addEventListener("load", () => {
+                const el = document.getElementById("resultado");
+                if (el) {
+                  el.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center"
+                  });
+                }
+              });
+            `,
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -1,12 +1,12 @@
 import Header from "./_components/header";
 import BookingItem from "./_components/booking-item";
 
-import { Input } from "./_components/ui/input";
 import { Button } from "./_components/ui/button";
 
 import { quickSearchOptions } from "./_constants/search";
 
-import { SearchIcon } from "lucide-react";
+import Search from "./_components/search";
+
 import Image from "next/image";
 
 import BarbershopItem from "./_components/barbershop-item";
@@ -32,15 +32,11 @@ const Home = async () => {
 
           {/* BUSCA */}
           <div className="mt-6 flex items-center gap-2">
-            <Input placeholder="Faça sua busca..." />
-
-            <Button>
-              <SearchIcon />
-            </Button>
+            <Search />
           </div>
 
           {/* BUSCA RÁPIDA */}
-          <div className="mt-6 flex gap-4 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+          <div className="mt-6 flex gap-4 ">
             {quickSearchOptions.map((option) => (
               <Button key={option.title} className="gap-5 text-gray-600">
                 <Image
