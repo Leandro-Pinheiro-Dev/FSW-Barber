@@ -1,9 +1,10 @@
 import { db } from "@/lib/prisma";
 import Link from "next/link";
+import Image from "next/image";
 
 import { Button } from "@/app/_components/ui/button";
 import { ChevronLeftIcon, MapPinIcon, MenuIcon, StarIcon } from "lucide-react";
-import Image from "next/image";
+
 import ServiceItem from "@/app/_components/service-item";
 import PhoneItem from "@/app/_components/phone-item";
 import { Sheet, SheetTrigger } from "@/app/_components/ui/sheet";
@@ -24,9 +25,13 @@ const BarbershopPage = async ({
   params,
   searchParams,
 }: BarbershopPageProps) => {
+  // Recebe o id da URL
   const { id } = await params;
+
+  // Recebe o texto pesquisado (caso exista)
   const { search = "" } = await searchParams;
 
+  // Busca a barbearia e seus relacionamentos
   const barbershop = await db.barbershop.findUnique({
     where: {
       id,
@@ -44,18 +49,26 @@ const BarbershopPage = async ({
     );
   }
 
+  const services = barbershop.services.map((service) => ({
+    ...service,
+    price: Number(service.price),
+  }));
+
   return (
     <div className="mx-auto w-full max-w-5xl">
-      {/* IMAGEM */}
+      {/* ====================== */}
+      {/* Banner da Barbearia */}
+      {/* ====================== */}
       <div className="relative h-120 w-full overflow-hidden rounded-2xl">
         <Image
           src="/detalhes.jpeg"
           alt={barbershop.name}
           fill
+          priority
           className="object-cover"
-          unoptimized
         />
 
+        {/* Botões superiores */}
         <div className="absolute inset-x-4 top-4 z-10 flex justify-between">
           <Sheet>
             <SheetTrigger render={<Button size="icon" variant="secondary" />}>
@@ -73,36 +86,44 @@ const BarbershopPage = async ({
         </div>
       </div>
 
-      {/* TÍTULO */}
+      {/* ====================== */}
+      {/* Informações */}
+      {/* ====================== */}
       <div className="border-b p-5 pt-8">
-        <h1 className="mb-3 mt-2 text-xl font-bold">{barbershop.name}</h1>
+        <h1 className="mb-3 text-xl font-bold">{barbershop.name}</h1>
 
         <div className="mb-2 flex items-center gap-2">
-          <MapPinIcon className="text-primary" size={18} />
+          <MapPinIcon size={18} className="text-primary" />
+
           <p className="text-sm">{barbershop.address}</p>
         </div>
 
         <div className="flex items-center gap-2">
-          <StarIcon className="fill-primary text-primary" size={18} />
+          <StarIcon size={18} className="fill-primary text-primary" />
+
           <p className="text-sm">5,0 (80 avaliações)</p>
         </div>
       </div>
 
-      {/* DESCRIÇÃO */}
+      {/* ====================== */}
+      {/* Sobre */}
+      {/* ====================== */}
       <div className="space-y-3 border-b p-5">
-        <h2 className="text-xs font-bold uppercase text-gray-400">Sobre Nós</h2>
+        <h2 className="text-xs font-bold uppercase text-gray-400">Sobre nós</h2>
 
-        <p className="text-sm text-justify">{barbershop.description}</p>
+        <p className="text-justify text-sm">{barbershop.description}</p>
       </div>
 
-      {/* SERVIÇOS */}
+      {/* ====================== */}
+      {/* Serviços */}
+      {/* ====================== */}
       <div className="space-y-3 border-b p-5">
         <h2 className="mb-3 text-xs font-bold uppercase text-gray-400">
           Serviços
         </h2>
 
         <div className="space-y-3">
-          {barbershop.services.map((service) => {
+          {services.map((service) => {
             const match =
               search &&
               (service.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -118,21 +139,28 @@ const BarbershopPage = async ({
                   match ? "rounded-xl border-2 border-primary p-2" : undefined
                 }
               >
-                <ServiceItem service={service} />
+                <ServiceItem
+                  service={service}
+                  barbershop={{
+                    name: barbershop.name,
+                  }}
+                />
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* CONTATO */}
+      {/* ====================== */}
+      {/* Telefones */}
+      {/* ====================== */}
       <div className="space-y-3 p-5">
         {barbershop.phones.map((phone) => (
           <PhoneItem key={phone} phone={phone} />
         ))}
       </div>
 
-      {/* Scroll automático */}
+      {/* Scroll automático para o resultado */}
       {search && <ScrollToResult />}
     </div>
   );
