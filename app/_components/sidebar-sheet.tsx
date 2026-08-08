@@ -7,21 +7,14 @@ import Link from "next/link";
 import { SheetClose, SheetContent, SheetHeader, SheetTitle } from "./ui/sheet";
 import { quickSearchOptions } from "../_constants/search";
 import { cn } from "@/lib/utils";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "./ui/dialog";
-import { signIn, signOut, useSession } from "next-auth/react";
+import { Dialog, DialogContent, DialogTrigger } from "./ui/dialog";
+import {  signOut, useSession } from "next-auth/react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { useRouter } from "next/navigation";
+import SignInDialog from "./sign-in-dialog";
 
 const SideBarSheet = () => {
   const { data } = useSession();
-  const handleLoginWithGoogleClick = () => signIn("google");
   const handleLogoutClick = () => signOut();
   const router = useRouter();
   return (
@@ -53,28 +46,8 @@ const SideBarSheet = () => {
               <DialogTrigger render={<Button size="icon" className="mr-40" />}>
                 <LogInIcon />
               </DialogTrigger>
-
               <DialogContent className="w-[90%]">
-                <DialogHeader>
-                  <DialogTitle>Faça seu Login na Plataforma</DialogTitle>
-                  <DialogDescription>
-                    Conecte-se usando sua conta do Google.
-                  </DialogDescription>
-                </DialogHeader>
-
-                <Button
-                  variant="outline"
-                  className="gap-1 font-bold"
-                  onClick={handleLoginWithGoogleClick}
-                >
-                  <Image
-                    alt="Fazer login com o Google"
-                    src="/google.png"
-                    width={18}
-                    height={18}
-                  />
-                  Google
-                </Button>
+                <SignInDialog />
               </DialogContent>
             </Dialog>
           </>
