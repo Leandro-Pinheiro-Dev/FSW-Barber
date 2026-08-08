@@ -8,7 +8,7 @@ import { SheetClose, SheetContent, SheetHeader, SheetTitle } from "./ui/sheet";
 import { quickSearchOptions } from "../_constants/search";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogTrigger } from "./ui/dialog";
-import {  signOut, useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { useRouter } from "next/navigation";
 import SignInDialog from "./sign-in-dialog";
@@ -107,16 +107,18 @@ const SideBarSheet = () => {
         ))}
       </div>
 
-      <div className="py-5 flex flex-col gap-2 border-b border-solid">
-        <Button
-          variant="ghost"
-          className=" justify-start"
-          onClick={handleLogoutClick}
-        >
-          <LogOutIcon size={18} />
-          Sair da Conta
-        </Button>
-      </div>
+      {data?.user && (
+        <div className="py-5 flex flex-col gap-2 border-b border-solid">
+          <Button
+            variant="ghost"
+            className=" justify-start"
+            onClick={handleLogoutClick}
+          >
+            <LogOutIcon size={18} />
+            Sair da Conta
+          </Button>
+        </div>
+      )}
     </SheetContent>
   );
 };
