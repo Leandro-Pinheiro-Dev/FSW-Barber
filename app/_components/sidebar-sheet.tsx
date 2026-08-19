@@ -75,7 +75,7 @@ const SideBarSheet = () => {
           nativeButton={false}
           render={
             <Link
-              href="/agendamentos"
+              href="/bookings"
               className={cn(
                 buttonVariants({ variant: "ghost" }),
                 "w-full justify-start gap-2",

@@ -11,10 +11,37 @@ import Image from "next/image";
 
 import BarbershopItem from "./_components/barbershop-item";
 import { db } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 const Home = async () => {
-  // Buscar a barbearia cadastrada
+  const session = await getServerSession(authOptions);
+  const today = new Date();
   const Barbershops = await db.barbershop.findMany();
+
+  const confirmedBookings = session?.user
+    ? await db.booking.findMany({
+        where: {
+          userId: session.user.id,
+          date: {
+            gte: new Date(),
+          },
+        },
+        include: {
+          service: {
+            include: {
+              barbershop: true,
+            },
+          },
+        },
+        orderBy: {
+          date: "asc",
+        },
+      })
+    : [];
 
   return (
     <div className="flex min-h-screen justify-center">
@@ -24,9 +51,12 @@ const Home = async () => {
         <div className="space-y-6 p-5">
           {/* BOAS-VINDAS */}
           <div>
-            <h2 className="text-xl font-bold">Olá, Cliente!</h2>
-            <p className="text-sm text-muted-foreground">
-              Quinta-feira, 02 de Julho.
+            <h2 className="text-xl font-bold">
+              Olá, {session?.user?.name?.split(" ")[0] || "Cliente"}!
+            </h2>
+
+            <p className="text-sm capitalize text-muted-foreground">
+              {format(today, "EEEE, dd 'de' MMMM", { locale: ptBR })}.
             </p>
           </div>
 
@@ -36,7 +66,7 @@ const Home = async () => {
           </div>
 
           {/* BUSCA RÁPIDA */}
-          <div className="mt-6 flex gap-4 ">
+          <div className="mt-6 flex gap-4">
             {quickSearchOptions.map((option) => (
               <Button key={option.title} className="gap-5 text-gray-600">
                 <Image
@@ -52,14 +82,16 @@ const Home = async () => {
           </div>
 
           {/* BANNER */}
-          <div className="relative mx-auto h-120 w-full max-w-2x1 overflow-hidden rounded-2xl">
+          <div className="relative h-120 w-full overflow-hidden rounded-2xl">
             <Image
               src="/home.jpeg"
               alt="Banner da barbearia"
               fill
-              className="object-contain"
+              className="object-cover"
+              priority
             />
           </div>
+
           {/* BARBEARIAS */}
           <div>
             <h2 className="mb-3 text-xs font-bold uppercase text-muted-foreground">
@@ -72,8 +104,18 @@ const Home = async () => {
               ))}
             </div>
           </div>
+
           {/* AGENDAMENTOS */}
-          <BookingItem />
+          <div>
+            <h2 className="mb-3 text-xs font-bold uppercase text-muted-foreground">
+              📅 Meus agendamentos
+            </h2>
+            <div className="flex gap-4 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden">
+              {confirmedBookings.map((booking) => (
+                <BookingItem key={booking.id} booking={booking} />
+              ))}
+            </div>
+          </div>
 
           {/* BARBEARIA */}
           {/* LOCALIZAÇÃO */}
