@@ -20,7 +20,7 @@ const SideBarSheet = () => {
   return (
     <SheetContent>
       <SheetHeader className="mt-8">
-        <SheetTitle className="text-left">Menu</SheetTitle>
+        <SheetTitle className="text-left">MENU</SheetTitle>
       </SheetHeader>
 
       <div className="flex  items-center justify-between border-b border-solid py-5">
@@ -68,7 +68,7 @@ const SideBarSheet = () => {
           }
         >
           <HomeIcon size={18} />
-          Início
+          INICIO
         </SheetClose>
 
         <SheetClose
@@ -84,7 +84,7 @@ const SideBarSheet = () => {
           }
         >
           <CalendarIcon size={18} />
-          Agendamentos
+          MEUS AGENDAMENTOS
         </SheetClose>
       </div>
 

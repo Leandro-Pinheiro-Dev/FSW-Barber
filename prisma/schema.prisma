@@ -36,15 +36,29 @@ model Session {
   @@map("sessions")
 }
 
+enum UserRole {
+  CUSTOMER
+  BARBER
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
   email         String?   @unique
   emailVerified DateTime? @map("email_verified")
   image         String?
-  bookings      Booking[]
-  accounts      Account[]
-  sessions      Session[]
+
+  bookings Booking[]
+  accounts Account[]
+  sessions Session[]
+
+  role UserRole @default(CUSTOMER)
+
+  needsRoleSelection Boolean @default(true)
+
+  debts CustomerDebt[]
+
+  reviews Review[]
 
   @@map("users")
 }
@@ -59,15 +73,18 @@ model VerificationToken {
 }
 
 model Barbershop {
-  id          String              @id @default(uuid())
-  name        String
-  address     String
-  phones      String[]
-  description String
-  imageUrl    String
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  services    BarbershopService[]
+  id             String              @id @default(uuid())
+  name           String              @unique
+  address        String
+  phones         String[]
+  description    String
+  imageUrl       String
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  services       BarbershopService[]
+  fixedSchedules FixedSchedule[]
+
+  reviews Review[]
 }
 
 model BarbershopService {
@@ -83,13 +100,79 @@ model BarbershopService {
   bookings     Booking[]
 }
 
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
 model Booking {
-  id        String            @id @default(uuid())
-  userId    String
-  serviceId String
-  date      DateTime
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
-  service   BarbershopService @relation(fields: [serviceId], references: [id])
-  user      User              @relation(fields: [userId], references: [id])
+  id          String        @id @default(uuid())
+  userId      String?
+  serviceId   String
+  date        DateTime
+  clientName  String?
+  clientPhone String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  status      BookingStatus @default(PENDING)
+
+  service BarbershopService @relation(fields: [serviceId], references: [id])
+  user    User?             @relation(fields: [userId], references: [id])
+
+  debts CustomerDebt[]
+}
+
+model FixedSchedule {
+  id           String   @id @default(uuid())
+  barbershopId String
+  clientName   String
+  dayOfWeek    Int
+  time         String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
+
+  @@unique([barbershopId, dayOfWeek, time])
+}
+
+enum DebtType {
+  DEBT
+  PAYMENT
+}
+
+model CustomerDebt {
+  id          String   @id @default(uuid())
+  userId      String?
+  bookingId   String?
+  clientName  String?
+  clientPhone String?
+  amount      Decimal  @db.Decimal(10, 2)
+  type        DebtType
+  description String?
+  createdAt   DateTime @default(now())
+
+  user    User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([bookingId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  userId       String
+  barbershopId String
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, barbershopId])
 }

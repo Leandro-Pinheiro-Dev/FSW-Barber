@@ -2,16 +2,27 @@
 
 import { SmartphoneIcon } from "lucide-react";
 import { Button } from "./ui/button";
-import { toast } from "sonner";
 
 interface PhoneItemProps {
   phone: string;
 }
 
 const PhoneItem = ({ phone }: PhoneItemProps) => {
-  const handleCopyPhoneClick = (phone: string) => {
-    navigator.clipboard.writeText(phone);
-    toast.success("Telefone copiado com sucesso!");
+  const handleWhatsAppClick = (phone: string) => {
+    // Remove espaços, parênteses, hífens e outros caracteres
+    const cleanPhone = phone.replace(/\D/g, "");
+
+    // Adiciona o código do Brasil caso ainda não exista
+    const whatsappPhone = cleanPhone.startsWith("55")
+      ? cleanPhone
+      : `55${cleanPhone}`;
+
+    // Abre o WhatsApp
+    window.open(
+      `https://wa.me/${whatsappPhone}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
   };
 
   return (
@@ -26,9 +37,9 @@ const PhoneItem = ({ phone }: PhoneItemProps) => {
       <Button
         variant="outline"
         size="sm"
-        onClick={() => handleCopyPhoneClick(phone)}
+        onClick={() => handleWhatsAppClick(phone)}
       >
-        Copiar
+        WhatsApp
       </Button>
     </div>
   );

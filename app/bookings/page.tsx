@@ -62,7 +62,7 @@ const Bookings = async () => {
       <Header />
 
       <div className="mx-auto w-full max-w-5xl p-5">
-        <h1 className="mb-6 text-xl font-bold">Agendamentos</h1>
+        <h1 className="mb-6 text-xl font-bold">MEUS AGENDAMENTOS</h1>
 
         {/* AGENDAMENTOS CONFIRMADOS */}
         <div>
