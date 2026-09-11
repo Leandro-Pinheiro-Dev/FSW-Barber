@@ -149,14 +149,14 @@ const Home = async () => {
               <h3 className="font-semibold">Barbearia SpaçoVip</h3>
 
               <p className="text-sm text-muted-foreground">
-                Av. Mitiharu Tanaka - Conj. Hab. Sao Jose, 671
+                Sebastião Batista de Oliveira - Conj. Hab. Sao Jose, 157
               </p>
 
               <p className="text-sm text-muted-foreground">
                 Campo Limpo Paulista - SP
               </p>
               <a
-                href="https://wa.me/5511999999999?text=Olá!%20Gostaria%20de%20mais%20informações%20sobre%20a%20barbearia."
+                href="https://wa.me/5511998821533?text=Olá!%20Gostaria%20de%20agendar%20um%20horário%20na%20Barbearia%20SpaçoVip."
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block"

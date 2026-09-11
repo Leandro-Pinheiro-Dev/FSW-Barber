@@ -62,9 +62,9 @@ const ReviewForm = ({ barbershopId }: ReviewFormProps) => {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger>
-        <Button variant="outline">Avaliar</Button>
-      </DialogTrigger>
+      <DialogTrigger
+        render={<Button variant="outline">Avaliar barbearia</Button>}
+      />
 
       <DialogContent>
         <DialogHeader>

@@ -80,6 +80,18 @@ interface CustomerDebtsProps {
 }
 
 // =====================================================
+// FUNÇÃO AUXILIAR
+// =====================================================
+
+const normalizePhone = (phone?: string | null) => {
+  if (!phone) {
+    return "";
+  }
+
+  return phone.replace(/\D/g, "");
+};
+
+// =====================================================
 // COMPONENTE
 // =====================================================
 
@@ -105,6 +117,10 @@ const CustomerDebts = ({ users }: CustomerDebtsProps) => {
       try {
         const result = await getCustomerDebts();
 
+        // =================================================
+        // CONVERTER RESULTADO DO BANCO
+        // =================================================
+
         const transactions: DebtTransaction[] = result.map((transaction) => ({
           ...transaction,
 
@@ -112,9 +128,28 @@ const CustomerDebts = ({ users }: CustomerDebtsProps) => {
 
           amount: Number(transaction.amount),
 
-          clientName: transaction.booking?.clientName ?? null,
+          /*
+           * IMPORTANTE:
+           *
+           * Primeiro usamos os dados que estão diretamente
+           * no CustomerDebt.
+           *
+           * O booking fica apenas como fallback.
+           *
+           * Antes estava assim:
+           *
+           * clientName: transaction.booking?.clientName ?? null
+           * clientPhone: transaction.booking?.clientPhone ?? null
+           *
+           * Isso fazia o cliente manual perder o telefone
+           * salvo no CustomerDebt.
+           */
 
-          clientPhone: transaction.booking?.clientPhone ?? null,
+          clientName:
+            transaction.clientName ?? transaction.booking?.clientName ?? null,
+
+          clientPhone:
+            transaction.clientPhone ?? transaction.booking?.clientPhone ?? null,
 
           createdAt: new Date(transaction.createdAt),
 
@@ -132,7 +167,9 @@ const CustomerDebts = ({ users }: CustomerDebtsProps) => {
                 userId: transaction.booking.userId,
                 serviceId: transaction.booking.serviceId,
                 date: transaction.booking.date,
+
                 clientName: transaction.booking.clientName,
+
                 clientPhone: transaction.booking.clientPhone,
 
                 service: {
@@ -151,38 +188,62 @@ const CustomerDebts = ({ users }: CustomerDebtsProps) => {
         const customerMap = new Map<string, CustomerDebt>();
 
         transactions.forEach((transaction) => {
-          // =====================================================
+          // =================================================
           // IDENTIFICAR CLIENTE
-          // =====================================================
+          // =================================================
 
           let customerKey: string | null = null;
 
+          // =================================================
           // CLIENTE CADASTRADO
+          // =================================================
+
           if (transaction.userId) {
             customerKey = `USER:${transaction.userId}`;
           }
 
+          // =================================================
           // CLIENTE MANUAL COM TELEFONE
+          // =================================================
           else if (transaction.clientPhone) {
-            customerKey = `PHONE:${transaction.clientPhone}`;
+            const phone = normalizePhone(transaction.clientPhone);
+
+            customerKey = `PHONE:${phone}`;
           }
 
+          // =================================================
           // CLIENTE MANUAL SEM TELEFONE
+          // =================================================
           else if (transaction.clientName) {
             customerKey = `NAME:${transaction.clientName.trim().toLowerCase()}`;
           }
 
+          // =================================================
           // NÃO TEM IDENTIFICAÇÃO
+          // =================================================
+
           if (!customerKey) {
             return;
           }
 
+          // =================================================
+          // BUSCAR CLIENTE EXISTENTE
+          // =================================================
+
           const existing = customerMap.get(customerKey);
+
+          // =================================================
+          // CALCULAR VALOR
+          // =================================================
 
           const value =
             transaction.type === "DEBT"
               ? transaction.amount
               : -transaction.amount;
+
+          // =================================================
+          // SERVIÇO
+          // =================================================
 
           const service =
             transaction.type === "DEBT" && transaction.booking
@@ -197,9 +258,9 @@ const CustomerDebts = ({ users }: CustomerDebtsProps) => {
                 }
               : null;
 
-          // =====================================================
+          // =================================================
           // CLIENTE JÁ EXISTE
-          // =====================================================
+          // =================================================
 
           if (existing) {
             existing.amount += value;
@@ -217,14 +278,29 @@ const CustomerDebts = ({ users }: CustomerDebtsProps) => {
             if (!existing.clientPhone && transaction.clientPhone) {
               existing.clientPhone = transaction.clientPhone;
             }
+
             return;
           }
 
-          // =====================================================
-          // NOVO CLIENTE
-          // =====================================================
+          // =================================================
+          // CRIAR NOVO CLIENTE
+          // =================================================
 
           customerMap.set(customerKey, {
+            /*
+             * Cliente cadastrado:
+             *
+             * USER:abc123
+             *
+             * Cliente manual:
+             *
+             * PHONE:11999999999
+             *
+             * ou
+             *
+             * NAME:joao
+             */
+
             userId: transaction.userId ?? `manual:${customerKey}`,
 
             name:
@@ -248,6 +324,7 @@ const CustomerDebts = ({ users }: CustomerDebtsProps) => {
             services: service ? [service] : [],
           });
         });
+
         // =================================================
         // CONVERTER MAP PARA ARRAY
         // =================================================
@@ -432,8 +509,20 @@ const CustomerDebts = ({ users }: CustomerDebtsProps) => {
                   {/* PAGAR */}
 
                   <PayDebtButton
-                    userId={customer.userId}
+                    userId={
+                      customer.userId.startsWith("manual:")
+                        ? undefined
+                        : customer.userId
+                    }
+
+                    bookingId={customer.transactions[0]?.bookingId ?? undefined}
+
+                    clientName={customer.clientName || undefined}
+
+                    clientPhone={customer.clientPhone || undefined}
+
                     amount={customer.amount}
+
                     onSuccess={loadDebts}
                   />
                 </div>
@@ -450,9 +539,7 @@ const CustomerDebts = ({ users }: CustomerDebtsProps) => {
       {selectedCustomer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
           <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 text-white shadow-2xl">
-            {/* =================================================
-                CABEÇALHO DO HISTÓRICO
-            ================================================= */}
+            {/* CABEÇALHO */}
 
             <div className="border-b border-zinc-800 p-6">
               <div className="flex items-start justify-between gap-4">
@@ -485,9 +572,7 @@ const CustomerDebts = ({ users }: CustomerDebtsProps) => {
                 </button>
               </div>
 
-              {/* =================================================
-                  SALDO
-              ================================================= */}
+              {/* SALDO */}
 
               <div
                 className={`mt-5 rounded-xl border p-4 ${
@@ -516,9 +601,7 @@ const CustomerDebts = ({ users }: CustomerDebtsProps) => {
               </div>
             </div>
 
-            {/* =================================================
-                HISTÓRICO
-            ================================================= */}
+            {/* HISTÓRICO */}
 
             <div className="overflow-y-auto p-6">
               {selectedCustomer.transactions.length === 0 ? (
@@ -559,9 +642,7 @@ const CustomerDebts = ({ users }: CustomerDebtsProps) => {
                           className="rounded-xl border border-zinc-800 bg-zinc-950 p-4"
                         >
                           <div className="flex items-start justify-between gap-4">
-                            {/* =================================================
-                                INFORMAÇÕES
-                            ================================================= */}
+                            {/* INFORMAÇÕES */}
 
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
@@ -601,11 +682,15 @@ const CustomerDebts = ({ users }: CustomerDebtsProps) => {
                                   Cliente: {transaction.clientName}
                                 </p>
                               )}
+
+                              {transaction.clientPhone && (
+                                <p className="mt-1 text-xs text-zinc-600">
+                                  Telefone: {transaction.clientPhone}
+                                </p>
+                              )}
                             </div>
 
-                            {/* =================================================
-                                VALOR
-                            ================================================= */}
+                            {/* VALOR */}
 
                             <p
                               className={`whitespace-nowrap font-bold ${
@@ -623,9 +708,7 @@ const CustomerDebts = ({ users }: CustomerDebtsProps) => {
               )}
             </div>
 
-            {/* =================================================
-                RODAPÉ
-            ================================================= */}
+            {/* RODAPÉ */}
 
             <div className="border-t border-zinc-800 p-4">
               <div className="flex justify-end">

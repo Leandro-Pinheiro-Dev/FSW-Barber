@@ -31,10 +31,42 @@ const PayDebtButton = ({
   // =====================================================
 
   const handleClose = () => {
-    if (isPending) return;
+    if (isPending) {
+      return;
+    }
 
     setOpen(false);
     setPaymentAmount("");
+  };
+
+  // =====================================================
+  // FORMATAR VALOR
+  // =====================================================
+
+  const formatCurrency = (value: number) => {
+    return value.toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
+  // =====================================================
+  // CONVERTER VALOR DIGITADO
+  // =====================================================
+
+  const parsePaymentAmount = (value: string) => {
+    /**
+     * Aceita:
+     *
+     * 35
+     * 35,00
+     * 35.00
+     * 1.500,00
+     */
+
+    const normalized = value.trim().replace(/\./g, "").replace(",", ".");
+
+    return Number(normalized);
   };
 
   // =====================================================
@@ -42,9 +74,7 @@ const PayDebtButton = ({
   // =====================================================
 
   const handleSubmit = () => {
-    const numericAmount = Number(
-      paymentAmount.replace(/\./g, "").replace(",", "."),
-    );
+    const numericAmount = parsePaymentAmount(paymentAmount);
 
     // ===================================================
     // VALOR INVÁLIDO
@@ -61,10 +91,11 @@ const PayDebtButton = ({
 
     if (numericAmount > amount) {
       toast.error(
-        `O pagamento não pode ser maior que o saldo de R$ ${amount.toFixed(
-          2,
+        `O pagamento não pode ser maior que o saldo de R$ ${formatCurrency(
+          amount,
         )}.`,
       );
+
       return;
     }
 
@@ -72,10 +103,24 @@ const PayDebtButton = ({
     // VERIFICAR IDENTIFICAÇÃO
     // ===================================================
 
-    if (!userId && !bookingId && !clientName) {
+    if (!userId && !bookingId && !clientName && !clientPhone) {
       toast.error("Não foi possível identificar o cliente.");
+
       return;
     }
+
+    // ===================================================
+    // DEBUG
+    // ===================================================
+
+    console.log("DADOS DO PAGAMENTO:", {
+      userId,
+      bookingId,
+      clientName,
+      clientPhone,
+      amount,
+      numericAmount,
+    });
 
     // ===================================================
     // REGISTRAR PAGAMENTO
@@ -91,30 +136,39 @@ const PayDebtButton = ({
           amount: numericAmount,
         });
 
-        // =================================================
+        // ===============================================
         // PAGAMENTO TOTAL
-        // =================================================
+        // ===============================================
 
         if (result.remainingAmount <= 0) {
           toast.success("Fiado pago completamente.");
         }
 
-        // =================================================
+        // ===============================================
         // PAGAMENTO PARCIAL
-        // =================================================
+        // ===============================================
         else {
           toast.success(
-            `Pagamento registrado. Saldo restante: R$ ${result.remainingAmount.toFixed(
-              2,
+            `Pagamento registrado. Saldo restante: R$ ${formatCurrency(
+              result.remainingAmount,
             )}.`,
           );
         }
 
-        handleClose();
+        // ===============================================
+        // FECHAR MODAL
+        // ===============================================
+
+        setOpen(false);
+        setPaymentAmount("");
+
+        // ===============================================
+        // ATUALIZAR COMPONENTE PAI
+        // ===============================================
 
         onSuccess?.();
       } catch (error) {
-        console.error(error);
+        console.error("ERRO AO REGISTRAR PAGAMENTO:", error);
 
         toast.error(
           error instanceof Error
@@ -123,6 +177,14 @@ const PayDebtButton = ({
         );
       }
     });
+  };
+
+  // =====================================================
+  // PAGAR VALOR TOTAL
+  // =====================================================
+
+  const handlePayFullAmount = () => {
+    setPaymentAmount(amount.toFixed(2).replace(".", ","));
   };
 
   // =====================================================
@@ -181,7 +243,7 @@ const PayDebtButton = ({
               <p className="text-sm text-zinc-400">Saldo em aberto</p>
 
               <p className="mt-1 text-2xl font-bold text-red-400">
-                R$ {amount.toFixed(2)}
+                R$ {formatCurrency(amount)}
               </p>
             </div>
 
@@ -190,14 +252,18 @@ const PayDebtButton = ({
             =========================================== */}
 
             <div className="mt-5">
-              <label className="mb-2 block text-sm font-medium text-zinc-300">
+              <label
+                htmlFor="paymentAmount"
+                className="mb-2 block text-sm font-medium text-zinc-300"
+              >
                 Valor do pagamento
               </label>
 
               <input
+                id="paymentAmount"
                 type="text"
                 inputMode="decimal"
-                placeholder={`Ex.: ${amount.toFixed(2).replace(".", ",")}`}
+                placeholder={`Ex.: ${formatCurrency(amount)}`}
                 value={paymentAmount}
                 onChange={(event) => setPaymentAmount(event.target.value)}
                 disabled={isPending}
@@ -211,13 +277,11 @@ const PayDebtButton = ({
 
             <button
               type="button"
-              onClick={() =>
-                setPaymentAmount(amount.toFixed(2).replace(".", ","))
-              }
+              onClick={handlePayFullAmount}
               disabled={isPending}
               className="mt-3 text-sm text-green-400 transition hover:text-green-300 disabled:opacity-50"
             >
-              Pagar valor total de R$ {amount.toFixed(2)}
+              Pagar valor total de R$ {formatCurrency(amount)}
             </button>
 
             {/* ===========================================

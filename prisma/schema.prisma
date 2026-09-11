@@ -36,29 +36,19 @@ model Session {
   @@map("sessions")
 }
 
-enum UserRole {
-  CUSTOMER
-  BARBER
-}
-
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime? @map("email_verified")
-  image         String?
-
-  bookings Booking[]
-  accounts Account[]
-  sessions Session[]
-
-  role UserRole @default(CUSTOMER)
-
-  needsRoleSelection Boolean @default(true)
-
-  debts CustomerDebt[]
-
-  reviews Review[]
+  id                 String         @id @default(cuid())
+  name               String?
+  email              String?        @unique
+  emailVerified      DateTime?      @map("email_verified")
+  image              String?
+  role               UserRole       @default(CUSTOMER)
+  needsRoleSelection Boolean        @default(true)
+  bookings           Booking[]
+  debts              CustomerDebt[]
+  reviews            Review[]
+  accounts           Account[]
+  sessions           Session[]
 
   @@map("users")
 }
@@ -83,8 +73,7 @@ model Barbershop {
   updatedAt      DateTime            @updatedAt
   services       BarbershopService[]
   fixedSchedules FixedSchedule[]
-
-  reviews Review[]
+  reviews        Review[]
 }
 
 model BarbershopService {
@@ -100,6 +89,98 @@ model BarbershopService {
   bookings     Booking[]
 }
 
+model Booking {
+  id                    String                 @id @default(uuid())
+  userId                String?
+  serviceId             String
+  date                  DateTime
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  status                BookingStatus          @default(PENDING)
+  clientName            String?
+  clientPhone           String?
+  reminderSent          Boolean                @default(false)
+  reminderSentAt        DateTime?
+  service               BarbershopService      @relation(fields: [serviceId], references: [id])
+  user                  User?                  @relation(fields: [userId], references: [id])
+  debts                 CustomerDebt[]
+  financialTransactions FinancialTransaction[]
+
+  @@index([date])
+  @@index([reminderSent, date])
+}
+
+model FixedSchedule {
+  id           String     @id @default(uuid())
+  barbershopId String
+  clientName   String
+  dayOfWeek    Int
+  time         String
+  active       Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  barbershop   Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
+
+  @@unique([barbershopId, dayOfWeek, time])
+}
+
+model CustomerDebt {
+  id          String   @id @default(uuid())
+  userId      String?
+  bookingId   String?
+  amount      Decimal  @db.Decimal(10, 2)
+  type        DebtType
+  description String?
+  createdAt   DateTime @default(now())
+  clientName  String?
+  clientPhone String?
+  booking     Booking? @relation(fields: [bookingId], references: [id])
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  financialTransactions FinancialTransaction[]
+
+  @@index([userId])
+  @@index([bookingId])
+}
+
+model FinancialTransaction {
+  id             String                   @id @default(uuid())
+  amount         Decimal                  @db.Decimal(10, 2)
+  type           FinancialTransactionType
+  description    String?
+  bookingId      String?
+  customerDebtId String?
+  clientName     String?
+  clientPhone    String?
+  createdAt      DateTime                 @default(now())
+
+  booking      Booking?      @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  customerDebt CustomerDebt? @relation(fields: [customerDebtId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([type])
+  @@index([bookingId])
+  @@index([customerDebtId])
+}
+
+model Review {
+  id           String     @id @default(cuid())
+  rating       Int
+  comment      String?
+  createdAt    DateTime   @default(now())
+  userId       String
+  barbershopId String
+  barbershop   Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, barbershopId])
+}
+
+enum UserRole {
+  CUSTOMER
+  BARBER
+}
+
 enum BookingStatus {
   PENDING
   CONFIRMED
@@ -107,72 +188,12 @@ enum BookingStatus {
   CANCELLED
 }
 
-model Booking {
-  id          String        @id @default(uuid())
-  userId      String?
-  serviceId   String
-  date        DateTime
-  clientName  String?
-  clientPhone String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  status      BookingStatus @default(PENDING)
-
-  service BarbershopService @relation(fields: [serviceId], references: [id])
-  user    User?             @relation(fields: [userId], references: [id])
-
-  debts CustomerDebt[]
-}
-
-model FixedSchedule {
-  id           String   @id @default(uuid())
-  barbershopId String
-  clientName   String
-  dayOfWeek    Int
-  time         String
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
-
-  @@unique([barbershopId, dayOfWeek, time])
-}
-
 enum DebtType {
   DEBT
   PAYMENT
 }
 
-model CustomerDebt {
-  id          String   @id @default(uuid())
-  userId      String?
-  bookingId   String?
-  clientName  String?
-  clientPhone String?
-  amount      Decimal  @db.Decimal(10, 2)
-  type        DebtType
-  description String?
-  createdAt   DateTime @default(now())
-
-  user    User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
-
-  @@index([userId])
-  @@index([bookingId])
-}
-
-model Review {
-  id        String   @id @default(cuid())
-  rating    Int
-  comment   String?
-  createdAt DateTime @default(now())
-
-  userId       String
-  barbershopId String
-
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, barbershopId])
+enum FinancialTransactionType {
+  SERVICE_PAYMENT
+  DEBT_PAYMENT
 }
