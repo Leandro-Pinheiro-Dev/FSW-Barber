@@ -1,14 +1,10 @@
 import Header from "./_components/header";
-
 import { Button } from "./_components/ui/button";
-
 import { quickSearchOptions } from "./_constants/search";
-
 import Search from "./_components/search";
-
 import Image from "next/image";
-
 import BarbershopItem from "./_components/barbershop-item";
+
 import { db } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -29,8 +25,7 @@ const Home = async () => {
   // -----------------------------------------------------
   // USUÁRIO NÃO LOGADO
   // -----------------------------------------------------
-  // Não permite acessar a aplicação sem autenticação.
-  // Primeiro passa pela tela de login.
+
   if (!session?.user) {
     redirect("/login");
   }
@@ -38,8 +33,7 @@ const Home = async () => {
   // -----------------------------------------------------
   // BARBEIRO
   // -----------------------------------------------------
-  // Rafael não deve acessar a tela de cliente.
-  // Ele vai diretamente para o painel administrativo.
+
   if (session.user.role === "BARBER") {
     redirect("/barbeiro/dashboard");
   }
@@ -50,100 +44,151 @@ const Home = async () => {
 
   const today = new Date();
 
-  const Barbershops = await db.barbershop.findMany();
+  const barbershops = await db.barbershop.findMany();
 
   return (
-    <div className="flex min-h-screen justify-center">
+    <div className="flex min-h-screen justify-center bg-background">
       <div className="w-full max-w-5xl">
+        {/* =====================================================
+            HEADER
+        ===================================================== */}
+
         <Header />
 
-        <div className="space-y-6 p-5">
-          {/* BOAS-VINDAS */}
-          <div>
-            <h2 className="text-xl font-bold">
-              Olá, {session?.user?.name?.split(" ")[0] || "Cliente"}!
+        {/* =====================================================
+            CONTEÚDO
+        ===================================================== */}
+
+        <main className="space-y-6 px-4 py-5 sm:px-5 md:py-6">
+          {/* =====================================================
+              BOAS-VINDAS
+          ===================================================== */}
+
+          <section>
+            <h2 className="text-xl font-bold sm:text-2xl">
+              Olá, {session.user.name?.split(" ")[0] || "Cliente"}!
             </h2>
 
             <p className="text-sm capitalize text-muted-foreground">
-              {format(today, "EEEE, dd 'de' MMMM", { locale: ptBR })}.
+              {format(today, "EEEE, dd 'de' MMMM", {
+                locale: ptBR,
+              })}
+              .
             </p>
-          </div>
+          </section>
 
-          {/* BUSCA */}
-          <div className="mt-6 flex items-center gap-2">
-            <Search />
-          </div>
+          {/* =====================================================
+              BUSCA
+          ===================================================== */}
 
-          {/* BUSCA RÁPIDA */}
-          <div className="mt-6 flex gap-4">
-            {quickSearchOptions.map((option) => (
-              <Button key={option.title} className="gap-5 text-gray-600">
-                <Image
-                  src={option.imageUrl}
-                  alt={option.title}
-                  width={50}
-                  height={50}
-                />
+          <section className="w-full">
+            <div className="w-full">
+              <Search />
+            </div>
+          </section>
 
-                {option.title}
-              </Button>
-            ))}
-          </div>
+          {/* =====================================================
+              BUSCA RÁPIDA
+          ===================================================== */}
 
-          {/* BANNER */}
-          <div className="relative h-120 w-full overflow-hidden rounded-2xl">
-            <Image
-              src="/home.jpeg"
-              alt="Banner da barbearia"
-              fill
-              sizes="100vw"
-              className="object-cover"
-              priority
-            />
-          </div>
+          <section>
+            <div className="flex w-full gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {quickSearchOptions.map((option) => (
+                <Button
+                  key={option.title}
+                  className="h-12 shrink-0 gap-2 px-3 text-sm text-gray-600 sm:px-4"
+                >
+                  <Image
+                    src={option.imageUrl}
+                    alt={option.title}
+                    width={32}
+                    height={32}
+                    className="h-8 w-8 object-contain"
+                  />
 
-          {/* BARBEARIAS */}
-          <div>
+                  <span className="whitespace-nowrap">{option.title}</span>
+                </Button>
+              ))}
+            </div>
+          </section>
+
+          {/* =====================================================
+              BANNER
+          ===================================================== */}
+
+          <section>
+            <div className="relative h-48 w-full overflow-hidden rounded-2xl sm:h-64 md:h-80">
+              <Image
+                src="/home.jpeg"
+                alt="Banner da barbearia"
+                fill
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 90vw, 1024px"
+                className="object-cover"
+                priority
+              />
+            </div>
+          </section>
+
+          {/* =====================================================
+              BARBEARIAS
+          ===================================================== */}
+
+          <section>
             <div className="mb-3 flex items-center gap-2 text-sm font-bold uppercase text-muted-foreground">
               <Image
                 alt="Ícone de barbeiro"
                 src="/poste-de-barbeiro.png"
                 width={22}
                 height={22}
-                className="brightness-0 invert"
+                className="h-[22px] w-[22px] object-contain"
               />
-              Barbearia
+
+              <span>Barbearia</span>
             </div>
 
-            <div className="flex gap-4 overflow-x-auto [&::-webkit-scrollbar]:hidden">
-              {Barbershops.map((barbershop) => (
+            <div className="flex gap-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {barbershops.map((barbershop) => (
                 <BarbershopItem key={barbershop.id} barbershop={barbershop} />
               ))}
             </div>
-          </div>
-          {/* LOCALIZAÇÃO */}
-          <div>
+          </section>
+
+          {/* =====================================================
+              LOCALIZAÇÃO
+          ===================================================== */}
+
+          <section>
             <div className="mb-3 flex items-center gap-2 text-sm font-bold uppercase text-muted-foreground">
               <Image
-                alt="localizacao"
+                alt="Localização"
                 src="/localizacao.png"
                 width={22}
                 height={22}
-                className="brightness-0 invert"
+                className="h-[22px] w-[22px] object-contain"
               />
-              Localização
+
+              <span>Localização</span>
             </div>
-            <div className="overflow-hidden rounded-2xl border">
+
+            {/* =================================================
+                MAPA RESPONSIVO
+            ================================================= */}
+
+            <div className="aspect-video w-full overflow-hidden rounded-2xl border">
               <iframe
                 src="https://www.google.com/maps/embed?pb=!3m2!1spt-BR!2sbr!4v1783143520245!5m2!1spt-BR!2sbr!6m8!1m7!1sTwe24M4lI-PSKZXPUayA4w!2m2!1d-23.21381344881015!2d-46.76093419562097!3f53.264221881845536!4f-7.647442068245411!5f0.7820865974627469"
                 width="100%"
-                height="350"
+                height="100%"
                 style={{ border: 0 }}
                 allowFullScreen
                 loading="lazy"
                 referrerPolicy="strict-origin-when-cross-origin"
               />
             </div>
+
+            {/* =================================================
+                DADOS DA BARBEARIA
+            ================================================= */}
 
             <div className="mt-4">
               <h3 className="font-semibold">Barbearia SpaçoVip</h3>
@@ -155,44 +200,60 @@ const Home = async () => {
               <p className="text-sm text-muted-foreground">
                 Campo Limpo Paulista - SP
               </p>
+
+              {/* =================================================
+                  WHATSAPP
+              ================================================= */}
+
               <a
                 href="https://wa.me/5511998821533?text=Olá!%20Gostaria%20de%20agendar%20um%20horário%20na%20Barbearia%20SpaçoVip."
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block"
               >
-                <Button className="mt-4 w-full gap-2">
+                <Button className="mt-4 h-11 w-full gap-2">
                   <MessageCircle size={18} />
                   Falar pelo WhatsApp
                 </Button>
               </a>
+
+              {/* =================================================
+                  INSTAGRAM
+              ================================================= */}
+
               <a
                 href="https://www.instagram.com/spaco_vip_rafael/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block"
               >
-                <Button className="mt-3 w-full gap-2">
+                <Button variant="outline" className="mt-3 h-11 w-full gap-2">
                   <Image
                     src="/logotipo-do-instagram.png"
                     alt="Instagram"
                     width={18}
                     height={18}
+                    className="h-[18px] w-[18px] object-contain"
                   />
                   Instagram
                 </Button>
               </a>
             </div>
 
+            {/* =================================================
+                VER ROTA
+            ================================================= */}
+
             <a
               href="https://maps.app.goo.gl/GP4oFqw8t9vRyjAe6"
               target="_blank"
               rel="noopener noreferrer"
+              className="block"
             >
-              <Button className="mt-4 w-full">Ver rota</Button>
+              <Button className="mt-4 h-11 w-full">Ver rota</Button>
             </a>
-          </div>
-        </div>
+          </section>
+        </main>
       </div>
     </div>
   );

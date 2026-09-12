@@ -1,8 +1,23 @@
 "use client";
 
-import { Button } from "@/app/_components/ui/button";
+import { useEffect, useState } from "react";
+
+import { Booking } from "@prisma/client";
+import { formatDate, set } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import Image from "next/image";
+import { useSession } from "next-auth/react";
+import { toast } from "sonner";
+
+import { createBooking } from "../_actions/create-booking";
+import { getBookings } from "../_actions/get-bookings";
+import { getFixedSchedules } from "../_actions/get-fixed-schedules";
+
+import { Button } from "@/app/_components/ui/button";
+
+import { Calendar } from "./ui/calendar";
 import { Card, CardContent } from "./ui/card";
+import { Dialog, DialogContent } from "./ui/dialog";
 import {
   Sheet,
   SheetContent,
@@ -11,18 +26,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "./ui/sheet";
-import { Calendar } from "./ui/calendar";
-import { ptBR } from "date-fns/locale";
-import { useEffect, useState } from "react";
-import { formatDate, set } from "date-fns";
-import { createBooking } from "../_actions/create-booking";
-import { useSession } from "next-auth/react";
-import { toast } from "sonner";
-import { getBookings } from "../_actions/get-bookings";
-import { getFixedSchedules } from "../_actions/get-fixed-schedules";
-import { Booking } from "@prisma/client";
 
-import { Dialog, DialogContent } from "./ui/dialog";
 import SignInDialog from "./sign-in-dialog";
 
 interface Service {
@@ -42,6 +46,7 @@ interface ServiceItemProps {
     name: string;
   };
 }
+
 interface FixedSchedule {
   time: string;
   clientName: string;
@@ -52,7 +57,6 @@ const TIME_LIST = [
   "09:00",
   "10:00",
   "11:00",
-  "12:00",
   "13:00",
   "14:00",
   "15:00",
@@ -79,25 +83,26 @@ const getTimeList = (bookings: Booking[], fixedSchedules: FixedSchedule[]) => {
       (schedule) => schedule.time === time,
     );
 
-    if (hasBookingOnCurrentTime || hasFixedSchedule) {
-      return false;
-    }
-
-    return true;
+    return !hasBookingOnCurrentTime && !hasFixedSchedule;
   });
 };
 
 const ServiceItem = ({ service, barbershop }: ServiceItemProps) => {
   const [signInDialogIsOpen, setSignInDialogIsOpen] = useState(false);
+
+  const [bookingSheetIsOpen, setBookingSheetIsOpen] = useState(false);
+
   const { data } = useSession();
-  const [selectedDay, SetSelectedDay] = useState<Date | undefined>(undefined);
-  const [selectedTime, SetSelectedTime] = useState<string | undefined>(
+
+  const [selectedDay, setSelectedDay] = useState<Date | undefined>(undefined);
+
+  const [selectedTime, setSelectedTime] = useState<string | undefined>(
     undefined,
   );
 
-  const [daysbookings, setDayBookings] = useState<Booking[]>([]);
+  const [daysBookings, setDayBookings] = useState<Booking[]>([]);
+
   const [fixedSchedules, setFixedSchedules] = useState<FixedSchedule[]>([]);
-  const [bookingSheetIsOpen, setBookingSheetIsOpen] = useState(false);
 
   useEffect(() => {
     const fetchAvailability = async () => {
@@ -107,6 +112,7 @@ const ServiceItem = ({ service, barbershop }: ServiceItemProps) => {
         const bookings = await getBookings({
           date: selectedDay,
         });
+
         const dayOfWeek = selectedDay.getDay();
 
         const fixed = await getFixedSchedules({
@@ -114,47 +120,54 @@ const ServiceItem = ({ service, barbershop }: ServiceItemProps) => {
           dayOfWeek,
         });
 
-        console.log("Bookings:", bookings);
-        console.log("Horários fixos:", fixed);
-
         setDayBookings(bookings);
         setFixedSchedules(fixed);
       } catch (error) {
         console.error("Erro ao buscar disponibilidade:", error);
+
         toast.error("Erro ao carregar horários.");
       }
     };
 
     fetchAvailability();
-  }, [selectedDay, service.id, service.barbershopId]);
+  }, [selectedDay, service.barbershopId]);
+
+  const availableTimes = getTimeList(daysBookings, fixedSchedules);
 
   const handleBookingClick = () => {
     if (data?.user) {
-      return setBookingSheetIsOpen(true);
+      setBookingSheetIsOpen(true);
+      return;
     }
-    return setSignInDialogIsOpen(true);
+
+    setSignInDialogIsOpen(true);
   };
 
   const handleBookingSheetOpenChange = (open: boolean) => {
     setBookingSheetIsOpen(open);
 
     if (!open) {
-      SetSelectedDay(undefined);
-      SetSelectedTime(undefined);
+      setSelectedDay(undefined);
+      setSelectedTime(undefined);
       setDayBookings([]);
       setFixedSchedules([]);
     }
   };
 
   const handleDateSelect = (date: Date | undefined) => {
-    SetSelectedDay(date);
+    setSelectedDay(date);
+    setSelectedTime(undefined);
   };
-  const handleTimeSelect = (time: string | undefined) => {
-    SetSelectedTime(time);
+
+  const handleTimeSelect = (time: string) => {
+    setSelectedTime(time);
   };
+
   const handleCreateBooking = async () => {
     try {
-      if (!selectedDay || !selectedTime) return;
+      if (!selectedDay || !selectedTime) {
+        return;
+      }
 
       if (!data?.user?.id) {
         toast.error("Faça login para realizar uma reserva.");
@@ -177,42 +190,56 @@ const ServiceItem = ({ service, barbershop }: ServiceItemProps) => {
       });
 
       toast.success("Reserva criada com sucesso!");
+
+      setBookingSheetIsOpen(false);
+      setSelectedDay(undefined);
+      setSelectedTime(undefined);
+      setDayBookings([]);
+      setFixedSchedules([]);
     } catch (error) {
       console.error(error);
+
       toast.error("Erro ao criar reserva!");
     }
   };
 
+  const formattedPrice = Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(Number(service.price));
+
   return (
     <>
-      <Card>
-        <CardContent>
-          <div className="border-b border-gray-800 py-6">
-            <div className="flex items-center gap-3 p-3">
-              {/* IMAGE */}
-              <div className="h-28 w-28 overflow-hidden rounded-lg">
+      <Card className="overflow-hidden">
+        <CardContent className="p-0">
+          <div className="border-b border-gray-800 p-3 sm:p-4">
+            <div className="flex gap-3 sm:gap-4">
+              {/* IMAGEM */}
+              <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl sm:h-28 sm:w-28">
                 <Image
                   src={service.imageUrl}
                   alt={service.name}
-                  width={112}
-                  height={112}
-                  className="h-full w-full object-cover"
+                  fill
+                  sizes="(max-width: 640px) 96px, 112px"
+                  className="object-cover"
                 />
               </div>
 
-              {/* DIREITA */}
-              <div className="space-y-2">
-                <h3 className="font-semibold text-sm">{service.name}</h3>
-                <p className="text-sm text-gray-400">{service.description}</p>
+              {/* INFORMAÇÕES */}
+              <div className="flex min-w-0 flex-1 flex-col">
+                <h3 className="text-sm font-semibold sm:text-base">
+                  {service.name}
+                </h3>
 
-                {/* PREÇO E BOTÃO */}
-                <div className="flex items-center justify-between">
-                  <p className="font-bold text-sm text-primary">
-                    {Intl.NumberFormat("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    }).format(Number(service.price))}
+                <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-gray-400 sm:text-sm">
+                  {service.description}
+                </p>
+
+                <div className="mt-auto flex items-end justify-between gap-2 pt-3">
+                  <p className="text-sm font-bold text-primary sm:text-base">
+                    {formattedPrice}
                   </p>
+
                   <Sheet
                     open={bookingSheetIsOpen}
                     onOpenChange={handleBookingSheetOpenChange}
@@ -222,70 +249,91 @@ const ServiceItem = ({ service, barbershop }: ServiceItemProps) => {
                         <Button
                           variant="secondary"
                           size="sm"
+                          className="shrink-0"
                           onClick={handleBookingClick}
                         />
                       }
                     >
                       Reservar
                     </SheetTrigger>
+
                     <SheetContent className="flex h-full flex-col px-0">
-                      <SheetHeader>
+                      <SheetHeader className="border-b px-5 py-4">
                         <SheetTitle>Fazer Reserva</SheetTitle>
                       </SheetHeader>
 
                       <div className="flex-1 overflow-y-auto">
-                        <div className="flex justify-center border-b border-solid py-5">
+                        {/* CALENDÁRIO */}
+                        <div className="flex justify-center border-b px-2 py-5">
                           <Calendar
                             mode="single"
                             locale={ptBR}
                             selected={selectedDay}
                             onSelect={handleDateSelect}
-                            disabled={{ before: new Date() }}
+                            disabled={{
+                              before: new Date(),
+                            }}
                           />
                         </div>
 
+                        {/* HORÁRIOS */}
                         {selectedDay && (
-                          <div className="flex gap-3 overflow-x-auto border-b border-solid p-5 [&::-webkit-scrollbar]:hidden">
-                            {getTimeList(daysbookings, fixedSchedules).map(
-                              (time) => (
-                                <Button
-                                  key={time}
-                                  variant={
-                                    selectedTime === time
-                                      ? "default"
-                                      : "outline"
-                                  }
-                                  className="rounded-full"
-                                  onClick={() => handleTimeSelect(time)}
-                                >
-                                  {time}
-                                </Button>
-                              ),
+                          <div className="border-b p-5">
+                            <h3 className="mb-3 text-sm font-semibold">
+                              Horários disponíveis
+                            </h3>
+
+                            {availableTimes.length > 0 ? (
+                              <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                                {availableTimes.map((time) => (
+                                  <Button
+                                    key={time}
+                                    type="button"
+                                    variant={
+                                      selectedTime === time
+                                        ? "default"
+                                        : "outline"
+                                    }
+                                    className="shrink-0 rounded-full"
+                                    onClick={() => handleTimeSelect(time)}
+                                  >
+                                    {time}
+                                  </Button>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">
+                                Não há horários disponíveis para este dia.
+                              </p>
                             )}
                           </div>
                         )}
 
+                        {/* RESUMO DA RESERVA */}
                         {selectedTime && selectedDay && (
-                          <div className="my-5 px-5">
+                          <div className="px-5 py-5">
                             <Card>
-                              <CardContent className="space-y-3 p-3">
-                                <div className="flex items-center justify-between">
-                                  <h2 className="font-bold">{service.name}</h2>
+                              <CardContent className="space-y-3 p-4">
+                                <div className="flex items-start justify-between gap-4">
+                                  <div>
+                                    <p className="text-xs text-gray-400">
+                                      Serviço
+                                    </p>
 
-                                  <p className="text-sm font-bold">
-                                    {Intl.NumberFormat("pt-BR", {
-                                      style: "currency",
-                                      currency: "BRL",
-                                    }).format(Number(service.price))}
+                                    <h2 className="font-bold">
+                                      {service.name}
+                                    </h2>
+                                  </div>
+
+                                  <p className="shrink-0 text-sm font-bold text-primary">
+                                    {formattedPrice}
                                   </p>
                                 </div>
 
-                                <div className="flex items-center justify-between">
-                                  <h2 className="text-sm text-gray-400">
-                                    Data
-                                  </h2>
+                                <div className="flex items-center justify-between border-t pt-3">
+                                  <p className="text-sm text-gray-400">Data</p>
 
-                                  <p className="text-sm">
+                                  <p className="text-sm font-medium capitalize">
                                     {formatDate(selectedDay, "d 'de' MMMM", {
                                       locale: ptBR,
                                     })}
@@ -293,19 +341,23 @@ const ServiceItem = ({ service, barbershop }: ServiceItemProps) => {
                                 </div>
 
                                 <div className="flex items-center justify-between">
-                                  <h2 className="text-sm text-gray-400">
+                                  <p className="text-sm text-gray-400">
                                     Horário
-                                  </h2>
+                                  </p>
 
-                                  <p className="text-sm">{selectedTime}</p>
+                                  <p className="text-sm font-medium">
+                                    {selectedTime}
+                                  </p>
                                 </div>
 
                                 <div className="flex items-center justify-between">
-                                  <h2 className="text-sm text-gray-400">
+                                  <p className="text-sm text-gray-400">
                                     Barbearia
-                                  </h2>
+                                  </p>
 
-                                  <p className="text-sm">{barbershop.name}</p>
+                                  <p className="max-w-[60%] truncate text-right text-sm font-medium">
+                                    {barbershop.name}
+                                  </p>
                                 </div>
                               </CardContent>
                             </Card>
@@ -313,13 +365,18 @@ const ServiceItem = ({ service, barbershop }: ServiceItemProps) => {
                         )}
                       </div>
 
-                      <SheetFooter className="border-t px-5 py-4">
+                      {/* CONFIRMAR */}
+                      <SheetFooter className="border-t bg-background px-5 py-4">
                         <Button
                           className="w-full"
                           onClick={handleCreateBooking}
-                          disabled={!selectedDay || !selectedTime}
+                          disabled={
+                            !selectedDay ||
+                            !selectedTime ||
+                            availableTimes.length === 0
+                          }
                         >
-                          Confirmar
+                          Confirmar reserva
                         </Button>
                       </SheetFooter>
                     </SheetContent>
@@ -331,11 +388,9 @@ const ServiceItem = ({ service, barbershop }: ServiceItemProps) => {
         </CardContent>
       </Card>
 
-      <Dialog
-        open={signInDialogIsOpen}
-        onOpenChange={(open) => setSignInDialogIsOpen(open)}
-      >
-        <DialogContent className="w-[90%]">
+      {/* LOGIN */}
+      <Dialog open={signInDialogIsOpen} onOpenChange={setSignInDialogIsOpen}>
+        <DialogContent className="w-[90%] max-w-md">
           <SignInDialog />
         </DialogContent>
       </Dialog>

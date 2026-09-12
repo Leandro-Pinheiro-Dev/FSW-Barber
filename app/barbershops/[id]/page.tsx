@@ -14,16 +14,8 @@ import { Sheet, SheetTrigger } from "@/app/_components/ui/sheet";
 import SideBarSheet from "@/app/_components/sidebar-sheet";
 
 import ScrollToResult from "@/app/_components/scroll-to-result";
-
 import ReviewForm from "@/app/_components/review-form";
 
-/**
- * ============================================================
- * TIPOS DA PÁGINA
- * ============================================================
- *
- * No Next.js 16, params e searchParams podem ser Promises.
- */
 interface BarbershopPageProps {
   params: Promise<{
     id: string;
@@ -34,116 +26,41 @@ interface BarbershopPageProps {
   }>;
 }
 
-/**
- * ============================================================
- * TIPAGEM DA AVALIAÇÃO
- * ============================================================
- *
- * Essa tipagem evita o problema:
- *
- * "Property 'length' does not exist on type 'never'"
- *
- * Também deixa explícito para o TypeScript quais dados
- * estamos utilizando de cada avaliação.
- */
 interface Review {
   id: string;
-
   rating: number;
-
   comment: string | null;
-
   createdAt: Date;
-
   user: {
     name: string | null;
   };
 }
 
-/**
- * ============================================================
- * PÁGINA DA BARBEARIA
- * ============================================================
- */
 const BarbershopPage = async ({
   params,
   searchParams,
 }: BarbershopPageProps) => {
-  /**
-   * ==========================================================
-   * 1. PEGA O ID DA BARBEARIA
-   * ==========================================================
-   *
-   * Exemplo:
-   *
-   * /barbershops/cmm123abc
-   *
-   * O "id" será:
-   *
-   * cmm123abc
-   */
-  const { id } = await params;
+  // =====================================================
+  // 1. PARÂMETROS
+  // =====================================================
 
-  /**
-   * ==========================================================
-   * 2. PEGA O TEXTO DA BUSCA
-   * ==========================================================
-   *
-   * Caso a URL tenha:
-   *
-   * ?search=corte
-   *
-   * teremos:
-   *
-   * search = "corte"
-   *
-   * Caso não exista, usamos uma string vazia.
-   */
+  const { id } = await params;
   const { search = "" } = await searchParams;
 
-  /**
-   * ==========================================================
-   * 3. BUSCA A BARBEARIA NO BANCO
-   * ==========================================================
-   *
-   * Estamos buscando:
-   *
-   * - serviços
-   * - avaliações
-   * - usuário que fez cada avaliação
-   *
-   * Assim conseguimos mostrar:
-   *
-   * Cliente:
-   * "Leandro"
-   *
-   * Nota:
-   * ⭐⭐⭐⭐⭐
-   *
-   * Comentário:
-   * "Excelente atendimento!"
-   */
+  // =====================================================
+  // 2. BUSCA BARBEARIA
+  // =====================================================
+
   const barbershop = await db.barbershop.findUnique({
     where: {
       id,
     },
 
     include: {
-      /**
-       * Serviços da barbearia
-       */
       services: true,
 
-      /**
-       * Avaliações
-       */
       reviews: {
         include: {
-          /**
-           * Pegamos somente o nome do cliente.
-           *
-           * Não precisamos trazer email, id etc.
-           */
           user: {
             select: {
               name: true,
@@ -151,9 +68,6 @@ const BarbershopPage = async ({
           },
         },
 
-        /**
-         * Mais recentes primeiro.
-         */
         orderBy: {
           createdAt: "desc",
         },
@@ -161,195 +75,162 @@ const BarbershopPage = async ({
     },
   });
 
-  /**
-   * ==========================================================
-   * 4. BARBEARIA NÃO ENCONTRADA
-   * ==========================================================
-   */
+  // =====================================================
+  // 3. BARBEARIA NÃO ENCONTRADA
+  // =====================================================
+
   if (!barbershop) {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center px-4 text-center">
         Barbearia não encontrada.
       </div>
     );
   }
 
-  /**
-   * ==========================================================
-   * 5. CRIA UMA CONSTANTE PARA AS AVALIAÇÕES
-   * ==========================================================
-   *
-   * Essa linha é importante.
-   *
-   * Em vez de ficar utilizando:
-   *
-   * barbershop.reviews.length
-   *
-   * várias vezes, trabalhamos com uma variável própria.
-   *
-   * Isso também ajuda o TypeScript a manter a inferência
-   * correta.
-   */
+  // =====================================================
+  // 4. AVALIAÇÕES
+  // =====================================================
+
   const reviews: Review[] = barbershop.reviews;
 
-  /**
-   * ==========================================================
-   * 6. CALCULA A MÉDIA DAS AVALIAÇÕES
-   * ==========================================================
-   *
-   * Exemplo:
-   *
-   * Avaliações:
-   *
-   * 5
-   * 4
-   * 5
-   *
-   * Média:
-   *
-   * (5 + 4 + 5) / 3 = 4.67
-   */
   const averageRating =
     reviews.length > 0
       ? reviews.reduce((total, review) => total + review.rating, 0) /
         reviews.length
       : 0;
 
-  /**
-   * ==========================================================
-   * 7. CONVERTE O DECIMAL DOS SERVIÇOS
-   * ==========================================================
-   *
-   * O Prisma pode retornar Decimal.
-   *
-   * Server Components não devem passar objetos Decimal
-   * diretamente para Client Components.
-   *
-   * Por isso:
-   *
-   * price: Number(service.price)
-   *
-   * transforma:
-   *
-   * Decimal(35)
-   *
-   * em:
-   *
-   * 35
-   */
+  // =====================================================
+  // 5. SERVIÇOS
+  // =====================================================
+
   const services = barbershop.services.map((service) => ({
     ...service,
     price: Number(service.price),
   }));
 
-  /**
-   * ==========================================================
-   * 8. NORMALIZA O TEXTO DA BUSCA
-   * ==========================================================
-   *
-   * Evita repetir:
-   *
-   * search.toLowerCase()
-   */
+  // =====================================================
+  // 6. BUSCA
+  // =====================================================
+
   const normalizedSearch = search.toLowerCase().trim();
 
-  /**
-   * ==========================================================
-   * 9. RENDERIZAÇÃO
-   * ==========================================================
-   */
-  return (
-    <div className="mx-auto w-full max-w-5xl">
-      {/* ======================================================
-          BANNER DA BARBEARIA
-      ====================================================== */}
+  // =====================================================
+  // 7. RENDERIZAÇÃO
+  // =====================================================
 
-      <div className="relative h-120 w-full overflow-hidden rounded-2xl">
+  return (
+    <div className="mx-auto min-h-screen w-full max-w-5xl">
+      {/* ===================================================
+          BANNER
+      =================================================== */}
+
+      <section className="relative h-64 w-full overflow-hidden sm:h-80 md:h-96 lg:rounded-2xl">
         <Image
           src="/detalhes.jpeg"
           alt={barbershop.name}
           fill
           priority
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 90vw, 1024px"
           className="object-cover"
         />
 
-        {/* Botões sobre o banner */}
+        {/* Gradiente para melhorar visibilidade dos botões */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/20" />
 
-        <div className="absolute inset-x-4 top-4 z-10 flex justify-between">
-          {/* Menu lateral */}
+        {/* =================================================
+            BOTÕES DO BANNER
+        ================================================= */}
+
+        <div className="absolute inset-x-3 top-3 z-10 flex items-center justify-between sm:inset-x-5 sm:top-5">
+          {/* VOLTAR */}
+
+          <Link href="/">
+            <Button
+              size="icon"
+              variant="secondary"
+              className="h-9 w-9 rounded-full shadow-md sm:h-10 sm:w-10"
+            >
+              <ChevronLeftIcon size={20} />
+            </Button>
+          </Link>
+
+          {/* MENU */}
 
           <Sheet>
-            <SheetTrigger render={<Button size="icon" variant="secondary" />}>
+            <SheetTrigger
+              render={
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="h-9 w-9 rounded-full shadow-md sm:h-10 sm:w-10"
+                />
+              }
+            >
               <MenuIcon size={20} />
             </SheetTrigger>
 
             <SideBarSheet />
           </Sheet>
-
-          {/* Voltar para a página inicial */}
-
-          <Link href="/">
-            <Button size="icon" variant="secondary">
-              <ChevronLeftIcon size={20} />
-            </Button>
-          </Link>
         </div>
-      </div>
+      </section>
 
-      {/* ======================================================
-          INFORMAÇÕES DA BARBEARIA
-      ====================================================== */}
+      {/* ===================================================
+          INFORMAÇÕES
+      =================================================== */}
 
-      <div className="border-b p-5 pt-8">
-        <h1 className="mb-3 text-xl font-bold">{barbershop.name}</h1>
+      <section className="border-b px-4 py-5 sm:px-5 sm:py-6">
+        <h1 className="mb-3 text-xl font-bold sm:text-2xl">
+          {barbershop.name}
+        </h1>
 
-        {/* Endereço */}
+        {/* ENDEREÇO */}
 
-        <div className="mb-2 flex items-center gap-2">
-          <MapPinIcon size={18} className="text-primary" />
+        <div className="mb-3 flex items-start gap-2">
+          <MapPinIcon size={18} className="mt-0.5 shrink-0 text-primary" />
 
-          <p className="text-sm">{barbershop.address}</p>
+          <p className="text-sm leading-5 text-muted-foreground sm:text-base">
+            {barbershop.address}
+          </p>
         </div>
 
-        {/* Avaliação geral */}
+        {/* AVALIAÇÃO */}
 
         <div className="flex items-center gap-2">
           <StarIcon size={18} className="fill-primary text-primary" />
 
-          <p className="text-sm">
+          <p className="text-sm sm:text-base">
             {averageRating > 0 ? averageRating.toFixed(1) : "Sem avaliações"} (
             {reviews.length} {reviews.length === 1 ? "avaliação" : "avaliações"}
             )
           </p>
         </div>
-      </div>
+      </section>
 
-      {/* ======================================================
-          SOBRE A BARBEARIA
-      ====================================================== */}
+      {/* ===================================================
+          SOBRE
+      =================================================== */}
 
-      <div className="space-y-3 border-b p-5">
-        <h2 className="text-xs font-bold uppercase text-gray-400">Sobre nós</h2>
+      <section className="space-y-3 border-b px-4 py-5 sm:px-5 sm:py-6">
+        <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          Sobre nós
+        </h2>
 
-        <p className="text-justify text-sm">{barbershop.description}</p>
-      </div>
+        <p className="text-sm leading-6 sm:text-base">
+          {barbershop.description}
+        </p>
+      </section>
 
-      {/* ======================================================
+      {/* ===================================================
           SERVIÇOS
-      ====================================================== */}
+      =================================================== */}
 
-      <div className="space-y-3 border-b p-5">
-        <h2 className="mb-3 text-xs font-bold uppercase text-gray-400">
+      <section className="space-y-4 border-b px-4 py-5 sm:px-5 sm:py-6">
+        <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
           Serviços
         </h2>
 
         <div className="space-y-3">
           {services.map((service) => {
-            /**
-             * Verifica se o serviço corresponde à pesquisa.
-             *
-             * Procuramos tanto no nome quanto na descrição.
-             */
             const match =
               normalizedSearch.length > 0 &&
               (service.name.toLowerCase().includes(normalizedSearch) ||
@@ -358,22 +239,13 @@ const BarbershopPage = async ({
             return (
               <div
                 key={service.id}
-
-                /**
-                 * Se encontrou o serviço,
-                 * adicionamos o id "resultado".
-                 *
-                 * O componente ScrollToResult usa esse id.
-                 */
                 id={match ? "resultado" : undefined}
-
                 className={
                   match ? "rounded-xl border-2 border-primary p-2" : undefined
                 }
               >
                 <ServiceItem
                   service={service}
-
                   barbershop={{
                     name: barbershop.name,
                   }}
@@ -382,22 +254,20 @@ const BarbershopPage = async ({
             );
           })}
         </div>
-      </div>
+      </section>
 
-      {/* ======================================================
+      {/* ===================================================
           AVALIAÇÕES
-      ====================================================== */}
+      =================================================== */}
 
-      <div className="space-y-5 border-b p-5">
-        {/* Cabeçalho da seção */}
+      <section className="space-y-5 border-b px-4 py-5 sm:px-5 sm:py-6">
+        {/* CABEÇALHO */}
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xs font-bold uppercase text-gray-400">
+            <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
               Avaliações
             </h2>
-
-            {/* Média */}
 
             <div className="mt-2 flex items-center gap-2">
               <StarIcon size={20} className="fill-primary text-primary" />
@@ -412,36 +282,25 @@ const BarbershopPage = async ({
             </div>
           </div>
 
-          {/* ==================================================
-              BOTÃO PARA AVALIAR
-              
-              O ReviewForm verifica o login pelo NextAuth
-              antes de permitir o envio.
-          ================================================== */}
-
           <ReviewForm barbershopId={barbershop.id} />
         </div>
 
-        {/* ====================================================
-            LISTA DE AVALIAÇÕES
-        ==================================================== */}
+        {/* LISTA */}
 
         {reviews.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Ainda não existem avaliações. Seja o primeiro a avaliar!
           </p>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {reviews.slice(0, 5).map((review) => (
               <div key={review.id} className="rounded-xl border p-4">
-                {/* Nome + estrelas */}
+                {/* NOME + ESTRELAS */}
 
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <p className="font-semibold">
                     {review.user.name || "Cliente"}
                   </p>
-
-                  {/* Estrelas */}
 
                   <div className="flex">
                     {[1, 2, 3, 4, 5].map((star) => (
@@ -458,15 +317,15 @@ const BarbershopPage = async ({
                   </div>
                 </div>
 
-                {/* Comentário */}
+                {/* COMENTÁRIO */}
 
                 {review.comment && (
-                  <p className="mt-2 text-sm text-muted-foreground">
+                  <p className="mt-2 text-sm leading-5 text-muted-foreground">
                     {review.comment}
                   </p>
                 )}
 
-                {/* Data */}
+                {/* DATA */}
 
                 <p className="mt-2 text-xs text-muted-foreground">
                   {new Intl.DateTimeFormat("pt-BR").format(
@@ -477,21 +336,21 @@ const BarbershopPage = async ({
             ))}
           </div>
         )}
-      </div>
+      </section>
 
-      {/* ======================================================
+      {/* ===================================================
           TELEFONES
-      ====================================================== */}
+      =================================================== */}
 
-      <div className="space-y-3 p-5">
+      <section className="space-y-3 px-4 py-5 sm:px-5 sm:py-6">
         {barbershop.phones.map((phone) => (
           <PhoneItem key={phone} phone={phone} />
         ))}
-      </div>
+      </section>
 
-      {/* ======================================================
-          SCROLL AUTOMÁTICO
-      ====================================================== */}
+      {/* ===================================================
+          SCROLL DA BUSCA
+      =================================================== */}
 
       {search && <ScrollToResult />}
     </div>
