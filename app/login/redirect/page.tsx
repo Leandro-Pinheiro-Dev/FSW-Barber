@@ -10,6 +10,9 @@ const LoginRedirectPage = async () => {
 
   const session = await getServerSession(authOptions);
 
+  console.log("LOGIN REDIRECT");
+  console.log("SESSION:", session);
+
   // =====================================================
   // USUÁRIO NÃO AUTENTICADO
   // =====================================================
@@ -21,10 +24,6 @@ const LoginRedirectPage = async () => {
   // =====================================================
   // BARBEIRO
   // =====================================================
-  //
-  // Se o usuário possuir role BARBER,
-  // vai para o dashboard.
-  // =====================================================
 
   if (session.user.role === "BARBER") {
     redirect("/barbeiro/dashboard");
@@ -32,9 +31,6 @@ const LoginRedirectPage = async () => {
 
   // =====================================================
   // CLIENTE
-  // =====================================================
-  //
-  // CUSTOMER volta para a página principal.
   // =====================================================
 
   redirect("/");

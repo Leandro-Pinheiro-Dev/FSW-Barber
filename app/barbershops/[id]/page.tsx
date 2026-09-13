@@ -1,5 +1,8 @@
 import { db } from "@/lib/prisma";
 
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
 import Link from "next/link";
 import Image from "next/image";
 
@@ -86,7 +89,49 @@ const BarbershopPage = async ({
       </div>
     );
   }
+  // =====================================================
+  // 3.1. STATUS DA AVALIAÇÃO DO CLIENTE
+  // =====================================================
 
+  const session = await getServerSession(authOptions);
+
+  let hasCompletedBooking = false;
+  let hasReviewed = false;
+
+  if (session?.user?.id && session.user.role === "CUSTOMER") {
+    const [completedBooking, existingReview] = await Promise.all([
+      // Verifica se o cliente já possui algum atendimento
+      // concluído nesta barbearia.
+      db.booking.findFirst({
+        where: {
+          userId: session.user.id,
+          status: "COMPLETED",
+          service: {
+            barbershopId: barbershop.id,
+          },
+        },
+        select: {
+          id: true,
+        },
+      }),
+
+      // Verifica se o cliente já avaliou esta barbearia.
+      db.review.findUnique({
+        where: {
+          userId_barbershopId: {
+            userId: session.user.id,
+            barbershopId: barbershop.id,
+          },
+        },
+        select: {
+          id: true,
+        },
+      }),
+    ]);
+
+    hasCompletedBooking = Boolean(completedBooking);
+    hasReviewed = Boolean(existingReview);
+  }
   // =====================================================
   // 4. AVALIAÇÕES
   // =====================================================
@@ -135,7 +180,7 @@ const BarbershopPage = async ({
         />
 
         {/* Gradiente para melhorar visibilidade dos botões */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/20" />
+        <div className="absolute inset-0 bg-linear-to-b from-black/30 via-transparent to-black/20" />
 
         {/* =================================================
             BOTÕES DO BANNER
@@ -281,8 +326,11 @@ const BarbershopPage = async ({
               </span>
             </div>
           </div>
-
-          <ReviewForm barbershopId={barbershop.id} />
+          <ReviewForm
+            barbershopId={barbershop.id}
+            hasCompletedBooking={hasCompletedBooking}
+            hasReviewed={hasReviewed}
+          />
         </div>
 
         {/* LISTA */}

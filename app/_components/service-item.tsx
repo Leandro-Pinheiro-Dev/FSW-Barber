@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { Booking } from "@prisma/client";
-import { formatDate, set } from "date-fns";
+import { formatDate } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
@@ -174,19 +174,24 @@ const ServiceItem = ({ service, barbershop }: ServiceItemProps) => {
         return;
       }
 
-      const hour = Number(selectedTime.split(":")[0]);
-      const minute = Number(selectedTime.split(":")[1]);
+      // =====================================================
+      // DATA NO FORMATO YYYY-MM-DD
+      // =====================================================
 
-      const newDate = set(selectedDay, {
-        hours: hour,
-        minutes: minute,
-        seconds: 0,
-        milliseconds: 0,
-      });
+      const year = selectedDay.getFullYear();
+      const month = String(selectedDay.getMonth() + 1).padStart(2, "0");
+      const day = String(selectedDay.getDate()).padStart(2, "0");
+
+      const selectedDate = `${year}-${month}-${day}`;
+
+      console.log("AGENDAMENTO");
+      console.log("DATA:", selectedDate);
+      console.log("HORÁRIO:", selectedTime);
 
       await createBooking({
         serviceId: service.id,
-        date: newDate,
+        date: selectedDate,
+        time: selectedTime,
       });
 
       toast.success("Reserva criada com sucesso!");
@@ -197,9 +202,11 @@ const ServiceItem = ({ service, barbershop }: ServiceItemProps) => {
       setDayBookings([]);
       setFixedSchedules([]);
     } catch (error) {
-      console.error(error);
+      console.error("ERRO AO CRIAR RESERVA:", error);
 
-      toast.error("Erro ao criar reserva!");
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao criar reserva!",
+      );
     }
   };
 
@@ -284,7 +291,7 @@ const ServiceItem = ({ service, barbershop }: ServiceItemProps) => {
                             </h3>
 
                             {availableTimes.length > 0 ? (
-                              <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none [&::-webkit-scrollbar]:hidden">
                                 {availableTimes.map((time) => (
                                   <Button
                                     key={time}

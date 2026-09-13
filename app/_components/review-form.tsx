@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-
-import { StarIcon } from "lucide-react";
+import { CheckCircle2, LockKeyhole, StarIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/app/_components/ui/button";
 import { Textarea } from "@/app/_components/ui/textarea";
+
 import {
   Dialog,
   DialogContent,
@@ -19,14 +19,77 @@ import { createReview } from "@/app/_actions/create-review";
 
 interface ReviewFormProps {
   barbershopId: string;
+  hasCompletedBooking: boolean;
+  hasReviewed: boolean;
 }
 
-const ReviewForm = ({ barbershopId }: ReviewFormProps) => {
+const ReviewForm = ({
+  barbershopId,
+  hasCompletedBooking,
+  hasReviewed,
+}: ReviewFormProps) => {
   const [open, setOpen] = useState(false);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(false);
 
+  /*
+   * ============================================================
+   * CLIENTE JÁ AVALIOU
+   * ============================================================
+   *
+   * Não mostramos o botão de avaliação porque a regra do sistema
+   * permite apenas uma avaliação por cliente/barbearia.
+   */
+  if (hasReviewed) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3">
+        <CheckCircle2 className="h-5 w-5 text-green-600" />
+
+        <div>
+          <p className="font-medium text-green-700">
+            Você já avaliou esta barbearia
+          </p>
+
+          <p className="text-sm text-muted-foreground">
+            Obrigado pelo seu feedback!
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  /*
+   * ============================================================
+   * CLIENTE AINDA NÃO POSSUI ATENDIMENTO CONCLUÍDO
+   * ============================================================
+   *
+   * O botão fica bloqueado porque a avaliação somente pode ser
+   * feita depois que o barbeiro marcar o atendimento como COMPLETED.
+   */
+  if (!hasCompletedBooking) {
+    return (
+      <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
+        <LockKeyhole className="h-5 w-5 shrink-0 text-muted-foreground" />
+
+        <div>
+          <p className="font-medium">Avaliação indisponível</p>
+
+          <p className="text-sm text-muted-foreground">
+            🔒 Avaliação disponível após a conclusão do atendimento.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  /*
+   * ============================================================
+   * CLIENTE POSSUI ATENDIMENTO COMPLETED
+   * ============================================================
+   *
+   * Agora o botão de avaliação fica disponível.
+   */
   const handleSubmit = async () => {
     if (rating === 0) {
       toast.error("Escolha uma nota de 1 a 5 estrelas.");
@@ -63,7 +126,12 @@ const ReviewForm = ({ barbershopId }: ReviewFormProps) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
-        render={<Button variant="outline">Avaliar barbearia</Button>}
+        render={
+          <Button variant="outline">
+            <StarIcon className="mr-2 h-4 w-4" />
+            Avaliar barbearia
+          </Button>
+        }
       />
 
       <DialogContent>
@@ -84,6 +152,7 @@ const ReviewForm = ({ barbershopId }: ReviewFormProps) => {
                   type="button"
                   onClick={() => setRating(star)}
                   className="transition-transform hover:scale-110"
+                  aria-label={`Dar ${star} estrela${star > 1 ? "s" : ""}`}
                 >
                   <StarIcon
                     size={32}

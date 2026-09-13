@@ -92,7 +92,7 @@ const Home = async () => {
           ===================================================== */}
 
           <section>
-            <div className="flex w-full gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex w-full gap-3 overflow-x-auto pb-2 scrollbar-none [&::-webkit-scrollbar]:hidden">
               {quickSearchOptions.map((option) => (
                 <Button
                   key={option.title}
@@ -140,13 +140,13 @@ const Home = async () => {
                 src="/poste-de-barbeiro.png"
                 width={22}
                 height={22}
-                className="h-[22px] w-[22px] object-contain"
+                className="h-5.5 w-5.5 object-contain"
               />
 
               <span>Barbearia</span>
             </div>
 
-            <div className="flex gap-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-none [&::-webkit-scrollbar]:hidden">
               {barbershops.map((barbershop) => (
                 <BarbershopItem key={barbershop.id} barbershop={barbershop} />
               ))}
@@ -164,7 +164,7 @@ const Home = async () => {
                 src="/localizacao.png"
                 width={22}
                 height={22}
-                className="h-[22px] w-[22px] object-contain"
+                className="h-5.5 w-5.5 object-contain"
               />
 
               <span>Localização</span>
@@ -233,7 +233,7 @@ const Home = async () => {
                     alt="Instagram"
                     width={18}
                     height={18}
-                    className="h-[18px] w-[18px] object-contain"
+                    className="h-4.5 w-4.5 object-contain"
                   />
                   Instagram
                 </Button>

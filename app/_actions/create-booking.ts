@@ -4,19 +4,24 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
-import { format } from "date-fns";
 
 interface CreateBookingParams {
   serviceId: string;
-  date: Date;
+  date: string;
+  time: string;
   userId?: string;
 }
 
 export const createBooking = async ({
   serviceId,
   date,
+  time,
   userId,
 }: CreateBookingParams) => {
+  // =====================================================
+  // 1. AUTENTICAÇÃO
+  // =====================================================
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
@@ -24,14 +29,38 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // DEFINIR O CLIENTE
+  // 2. DEFINIR O CLIENTE
   // =====================================================
 
   const bookingUserId =
     session.user.role === "BARBER" && userId ? userId : session.user.id;
 
   // =====================================================
-  // VERIFICAR SERVIÇO
+  // 3. VALIDAR DATA
+  // =====================================================
+
+  const selectedDate = new Date(`${date}T00:00:00`);
+
+  if (Number.isNaN(selectedDate.getTime())) {
+    throw new Error("Data inválida.");
+  }
+
+  // =====================================================
+  // 4. VALIDAR HORÁRIO
+  // =====================================================
+
+  if (!/^\d{2}:\d{2}$/.test(time)) {
+    throw new Error("Horário inválido.");
+  }
+
+  const [hours, minutes] = time.split(":").map(Number);
+
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    throw new Error("Horário inválido.");
+  }
+
+  // =====================================================
+  // 5. VERIFICAR SERVIÇO
   // =====================================================
 
   const service = await db.barbershopService.findUnique({
@@ -45,14 +74,30 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // DIA DA SEMANA E HORÁRIO
+  // 6. DIA DA SEMANA
+  //
+  // JavaScript:
+  // 0 = Domingo
+  // 1 = Segunda
+  // 2 = Terça
+  // 3 = Quarta
+  // 4 = Quinta
+  // 5 = Sexta
+  // 6 = Sábado
   // =====================================================
 
-  const dayOfWeek = date.getDay();
-  const time = format(date, "HH:mm");
+  const dayOfWeek = selectedDate.getDay();
+
+  console.log("=================================");
+  console.log("NOVO AGENDAMENTO");
+  console.log("DATA:", date);
+  console.log("HORÁRIO:", time);
+  console.log("DIA DA SEMANA:", dayOfWeek);
+  console.log("SERVIÇO:", serviceId);
+  console.log("=================================");
 
   // =====================================================
-  // VERIFICAR HORÁRIO FIXO
+  // 7. VERIFICAR HORÁRIO FIXO
   // =====================================================
 
   const fixedSchedule = await db.fixedSchedule.findFirst({
@@ -71,12 +116,25 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // VERIFICAR OUTRO AGENDAMENTO
+  // 8. CRIAR DATA DO AGENDAMENTO
+  //
+  // A data é criada no servidor usando a data escolhida
+  // e o horário enviado separadamente.
+  // =====================================================
+
+  const bookingDate = new Date(`${date}T${time}:00`);
+
+  if (Number.isNaN(bookingDate.getTime())) {
+    throw new Error("Não foi possível criar a data do agendamento.");
+  }
+
+  // =====================================================
+  // 9. VERIFICAR OUTRO AGENDAMENTO
   // =====================================================
 
   const existingBooking = await db.booking.findFirst({
     where: {
-      date,
+      date: bookingDate,
     },
   });
 
@@ -85,20 +143,20 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // CRIAR AGENDAMENTO
+  // 10. CRIAR AGENDAMENTO
   // =====================================================
 
   await db.booking.create({
     data: {
       userId: bookingUserId,
       serviceId,
-      date,
+      date: bookingDate,
       status: "PENDING",
     },
   });
 
   // =====================================================
-  // ATUALIZAR PÁGINAS
+  // 11. ATUALIZAR CACHE
   // =====================================================
 
   revalidatePath("/");
