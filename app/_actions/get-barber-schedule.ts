@@ -1,7 +1,9 @@
 "use server";
 
 import { getServerSession } from "next-auth";
+
 import { authOptions } from "@/lib/auth";
+
 import { db } from "@/lib/prisma";
 
 export const getBarberSchedule = async (date: string) => {
@@ -24,8 +26,10 @@ export const getBarberSchedule = async (date: string) => {
   }
 
   // =====================================================
-  // VALIDAR DATA RECEBIDA
-  // Esperamos: YYYY-MM-DD
+  // VALIDAR DATA
+  //
+  // Esperamos:
+  // YYYY-MM-DD
   // =====================================================
 
   if (!date || typeof date !== "string") {
@@ -44,44 +48,48 @@ export const getBarberSchedule = async (date: string) => {
   const day = Number(match[3]);
 
   // =====================================================
-  // CRIAR DATA LOCAL
+  // VALIDAR DATA
   // =====================================================
 
-  const selectedDate = new Date(year, month - 1, day);
+  const validationDate = new Date(Date.UTC(year, month - 1, day));
 
-  // Verificação extra para datas impossíveis
-  // Exemplo: 2026-02-31
   if (
-    selectedDate.getFullYear() !== year ||
-    selectedDate.getMonth() !== month - 1 ||
-    selectedDate.getDate() !== day
+    validationDate.getUTCFullYear() !== year ||
+    validationDate.getUTCMonth() !== month - 1 ||
+    validationDate.getUTCDate() !== day
   ) {
     console.error("DATA INVÁLIDA:", date);
-
     throw new Error("Data inválida para consultar a agenda.");
   }
 
   // =====================================================
-  // INÍCIO DO DIA
+  // DIA DA SEMANA
+  //
+  // Criamos a data considerando Brasília (UTC-3).
   // =====================================================
 
-  const startOfDay = new Date(selectedDate);
-  startOfDay.setHours(0, 0, 0, 0);
+  const brazilDate = new Date(`${date}T12:00:00-03:00`);
+
+  const dayOfWeek = brazilDate.getUTCDay();
 
   // =====================================================
-  // FINAL DO DIA
+  // INÍCIO DO DIA NO BRASIL
   // =====================================================
 
-  const endOfDay = new Date(selectedDate);
-  endOfDay.setHours(23, 59, 59, 999);
+  const startOfDay = new Date(`${date}T00:00:00-03:00`);
+
+  // =====================================================
+  // FINAL DO DIA NO BRASIL
+  // =====================================================
+
+  const endOfDay = new Date(`${date}T23:59:59.999-03:00`);
 
   console.log("=================================");
   console.log("AGENDA");
   console.log("DATA RECEBIDA:", date);
-  console.log("DATA LOCAL:", selectedDate);
   console.log("INÍCIO:", startOfDay);
   console.log("FINAL:", endOfDay);
-  console.log("DIA DA SEMANA:", selectedDate.getDay());
+  console.log("DIA DA SEMANA:", dayOfWeek);
   console.log("=================================");
 
   // =====================================================
@@ -93,6 +101,10 @@ export const getBarberSchedule = async (date: string) => {
       date: {
         gte: startOfDay,
         lte: endOfDay,
+      },
+
+      status: {
+        not: "CANCELLED",
       },
     },
 
@@ -109,8 +121,6 @@ export const getBarberSchedule = async (date: string) => {
   // =====================================================
   // BUSCAR HORÁRIOS FIXOS
   // =====================================================
-
-  const dayOfWeek = selectedDate.getDay();
 
   const fixedSchedules = await db.fixedSchedule.findMany({
     where: {
@@ -132,16 +142,15 @@ export const getBarberSchedule = async (date: string) => {
     userId: booking.userId,
     serviceId: booking.serviceId,
     date: booking.date,
-
     clientName:
       booking.clientName ??
       booking.user?.name ??
       booking.user?.email ??
       "Cliente",
-
     serviceName: booking.service.name,
     status: booking.status,
   }));
+
   // =====================================================
   // RETORNAR
   // =====================================================

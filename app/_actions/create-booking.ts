@@ -39,9 +39,7 @@ export const createBooking = async ({
   // 3. VALIDAR DATA
   // =====================================================
 
-  const selectedDate = new Date(`${date}T00:00:00`);
-
-  if (Number.isNaN(selectedDate.getTime())) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new Error("Data inválida.");
   }
 
@@ -75,9 +73,24 @@ export const createBooking = async ({
 
   // =====================================================
   // 6. DIA DA SEMANA
+  //
+  // Usamos explicitamente o horário de Brasília.
+  // Isso evita depender do timezone do servidor.
   // =====================================================
 
-  const dayOfWeek = selectedDate.getDay();
+  const selectedDate = new Date(`${date}T00:00:00-03:00`);
+
+  if (Number.isNaN(selectedDate.getTime())) {
+    throw new Error("Data inválida.");
+  }
+
+  // Para descobrir o dia da semana corretamente no Brasil,
+  // usamos a data original sem depender do timezone do servidor.
+  const [year, month, day] = date.split("-").map(Number);
+
+  const brazilDate = new Date(Date.UTC(year, month - 1, day, 3, 0, 0));
+
+  const dayOfWeek = brazilDate.getUTCDay();
 
   console.log("=================================");
   console.log("NOVO AGENDAMENTO");
@@ -107,10 +120,18 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 8. CRIAR DATA DO AGENDAMENTO
+  // 8. CRIAR DATA NO HORÁRIO DE BRASÍLIA
+  //
+  // IMPORTANTE:
+  // -03:00 = horário de Brasília
+  //
+  // Exemplo:
+  // 2026-09-18 15:00 Brasil
+  // será armazenado como:
+  // 2026-09-18T18:00:00.000Z
   // =====================================================
 
-  const bookingDate = new Date(`${date}T${time}:00`);
+  const bookingDate = new Date(`${date}T${time}:00-03:00`);
 
   if (Number.isNaN(bookingDate.getTime())) {
     throw new Error("Não foi possível criar a data do agendamento.");
@@ -118,14 +139,6 @@ export const createBooking = async ({
 
   // =====================================================
   // 9. VERIFICAR SE O HORÁRIO JÁ ESTÁ OCUPADO
-  //
-  // Não usamos mais:
-  //
-  // date: bookingDate
-  //
-  // porque isso exige igualdade exata.
-  //
-  // Agora procuramos dentro de um intervalo de 1 minuto.
   // =====================================================
 
   const slotStart = new Date(bookingDate);
@@ -150,7 +163,7 @@ export const createBooking = async ({
   });
 
   if (existingBooking) {
-    throw new Error("Este horário acabou de ser reservado por outro cliente.");
+    throw new Error("Este horário já está reservado por outro cliente.");
   }
 
   // =====================================================
