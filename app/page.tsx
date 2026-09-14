@@ -119,7 +119,7 @@ const Home = async () => {
           <section>
             <div className="relative h-48 w-full overflow-hidden rounded-2xl sm:h-64 md:h-80">
               <Image
-                src="/home.jpeg"
+                src="/pag.jpeg"
                 alt="Banner da barbearia"
                 fill
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 90vw, 1024px"
