@@ -1,12 +1,16 @@
 import Image from "next/image";
 
 import { Button } from "./ui/button";
+
 import { Card, CardContent } from "./ui/card";
 
 import { MenuIcon } from "lucide-react";
 
 import { Sheet, SheetTrigger } from "./ui/sheet";
+
 import SideBarSheet from "./sidebar-sheet";
+
+import InstallPwaButton from "./install-pwa-button";
 
 const Header = () => {
   return (
@@ -15,7 +19,6 @@ const Header = () => {
         {/* =====================================================
             LOGO
         ===================================================== */}
-
         <div className="relative h-12 w-32 sm:h-14 sm:w-36">
           <Image
             src="/LOGO_SpacoVip.jpeg"
@@ -28,16 +31,29 @@ const Header = () => {
         </div>
 
         {/* =====================================================
-            MENU
+            AÇÕES DO HEADER
         ===================================================== */}
+        <div className="flex items-center gap-2">
+          {/* =====================================================
+              BOTÃO INSTALAR PWA
+          ===================================================== */}
+          <InstallPwaButton />
 
-        <Sheet>
-          <SheetTrigger render={<Button variant="outline" size="icon" />}>
-            <MenuIcon className="h-5 w-5" />
-          </SheetTrigger>
+          {/* =====================================================
+              MENU
+          ===================================================== */}
+          <Sheet>
+            <SheetTrigger
+              render={
+                <Button variant="outline" size="icon" aria-label="Abrir menu" />
+              }
+            >
+              <MenuIcon className="h-5 w-5" />
+            </SheetTrigger>
 
-          <SideBarSheet />
-        </Sheet>
+            <SideBarSheet />
+          </Sheet>
+        </div>
       </CardContent>
     </Card>
   );
