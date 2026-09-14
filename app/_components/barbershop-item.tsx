@@ -17,7 +17,7 @@ const BarbershopItem = ({ barbershop }: BarbershopItemProps) => {
         {/* IMAGEM */}
         <div className="relative h-28 w-full overflow-hidden">
           <Image
-            src="/Agenda.jpeg"
+            src="/agenda.jpeg"
             alt={barbershop.name}
             fill
             sizes="(max-width: 640px) 176px, 192px"
