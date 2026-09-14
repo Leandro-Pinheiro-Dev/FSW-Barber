@@ -75,15 +75,6 @@ export const createBooking = async ({
 
   // =====================================================
   // 6. DIA DA SEMANA
-  //
-  // JavaScript:
-  // 0 = Domingo
-  // 1 = Segunda
-  // 2 = Terça
-  // 3 = Quarta
-  // 4 = Quinta
-  // 5 = Sexta
-  // 6 = Sábado
   // =====================================================
 
   const dayOfWeek = selectedDate.getDay();
@@ -117,9 +108,6 @@ export const createBooking = async ({
 
   // =====================================================
   // 8. CRIAR DATA DO AGENDAMENTO
-  //
-  // A data é criada no servidor usando a data escolhida
-  // e o horário enviado separadamente.
   // =====================================================
 
   const bookingDate = new Date(`${date}T${time}:00`);
@@ -129,24 +117,47 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 9. VERIFICAR OUTRO AGENDAMENTO
+  // 9. VERIFICAR SE O HORÁRIO JÁ ESTÁ OCUPADO
+  //
+  // Não usamos mais:
+  //
+  // date: bookingDate
+  //
+  // porque isso exige igualdade exata.
+  //
+  // Agora procuramos dentro de um intervalo de 1 minuto.
   // =====================================================
+
+  const slotStart = new Date(bookingDate);
+
+  slotStart.setSeconds(0, 0);
+
+  const slotEnd = new Date(slotStart);
+
+  slotEnd.setMinutes(slotEnd.getMinutes() + 1);
 
   const existingBooking = await db.booking.findFirst({
     where: {
-      date: bookingDate,
+      date: {
+        gte: slotStart,
+        lt: slotEnd,
+      },
+
+      status: {
+        not: "CANCELLED",
+      },
     },
   });
 
   if (existingBooking) {
-    throw new Error("Este horário já está agendado.");
+    throw new Error("Este horário acabou de ser reservado por outro cliente.");
   }
 
   // =====================================================
   // 10. CRIAR AGENDAMENTO
   // =====================================================
 
-  await db.booking.create({
+  const booking = await db.booking.create({
     data: {
       userId: bookingUserId,
       serviceId,
@@ -155,14 +166,24 @@ export const createBooking = async ({
     },
   });
 
+  console.log("=================================");
+  console.log("AGENDAMENTO CRIADO");
+  console.log("ID:", booking.id);
+  console.log("CLIENTE:", bookingUserId);
+  console.log("DATA:", booking.date);
+  console.log("STATUS:", booking.status);
+  console.log("=================================");
+
   // =====================================================
   // 11. ATUALIZAR CACHE
   // =====================================================
 
   revalidatePath("/");
+  revalidatePath("/bookings");
   revalidatePath("/barbeiro/dashboard");
 
   return {
     success: true,
+    bookingId: booking.id,
   };
 };
