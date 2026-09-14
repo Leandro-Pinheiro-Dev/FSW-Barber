@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { updateBooking } from "@/app/_actions/update-booking";
@@ -33,6 +33,8 @@ interface EditBookingButtonProps {
 
 type ClientType = "registered" | "manual";
 
+const BRAZIL_TIME_ZONE = "America/Sao_Paulo";
+
 const EditBookingButton = ({
   booking,
   users,
@@ -60,7 +62,6 @@ const EditBookingButton = ({
   // =====================================================
 
   const [clientName, setClientName] = useState(booking.clientName ?? "");
-
   const [clientPhone, setClientPhone] = useState(booking.clientPhone ?? "");
 
   // =====================================================
@@ -76,55 +77,43 @@ const EditBookingButton = ({
   const initialDate = new Date(booking.date);
 
   const [date, setDate] = useState(formatDateForInput(initialDate));
-
   const [time, setTime] = useState(formatTimeForInput(initialDate));
 
   // =====================================================
   // FORMATAR DATA PARA INPUT
+  //
+  // Sempre usando horário de Brasília.
   // =====================================================
 
   function formatDateForInput(date: Date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: BRAZIL_TIME_ZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(date);
+
+    const year = parts.find((part) => part.type === "year")?.value;
+    const month = parts.find((part) => part.type === "month")?.value;
+    const day = parts.find((part) => part.type === "day")?.value;
 
     return `${year}-${month}-${day}`;
   }
 
   // =====================================================
   // FORMATAR HORÁRIO PARA INPUT
+  //
+  // Sempre usando horário de Brasília.
   // =====================================================
 
   function formatTimeForInput(date: Date) {
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-
-    return `${hours}:${minutes}`;
+    return date.toLocaleTimeString("pt-BR", {
+      timeZone: BRAZIL_TIME_ZONE,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
   }
-
-  // =====================================================
-  // RESETAR DADOS AO ABRIR
-  // =====================================================
-
-  useEffect(() => {
-    if (!open) return;
-
-    const bookingDate = new Date(booking.date);
-
-    setClientType(booking.userId ? "registered" : "manual");
-
-    setUserId(booking.userId ?? "");
-
-    setClientName(booking.clientName ?? "");
-
-    setClientPhone(booking.clientPhone ?? "");
-
-    setServiceId(booking.serviceId);
-
-    setDate(formatDateForInput(bookingDate));
-
-    setTime(formatTimeForInput(bookingDate));
-  }, [open, booking]);
 
   // =====================================================
   // ATUALIZAR AGENDAMENTO
@@ -160,9 +149,18 @@ const EditBookingButton = ({
 
     // -----------------------------------------------------
     // CRIAR DATA
+    //
+    // O horário informado pelo barbeiro é horário de Brasília.
+    //
+    // Exemplo:
+    // 16:00 BR
+    // vira:
+    // 16:00-03:00
+    //
+    // Isso garante o mesmo horário na Vercel e no banco.
     // -----------------------------------------------------
 
-    const selectedDate = new Date(`${date}T${time}:00`);
+    const selectedDate = new Date(`${date}T${time}:00-03:00`);
 
     if (Number.isNaN(selectedDate.getTime())) {
       toast.error("Data ou horário inválido.");
@@ -217,7 +215,20 @@ const EditBookingButton = ({
     return (
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          const bookingDate = new Date(booking.date);
+
+          setClientType(booking.userId ? "registered" : "manual");
+          setUserId(booking.userId ?? "");
+          setClientName(booking.clientName ?? "");
+          setClientPhone(booking.clientPhone ?? "");
+          setServiceId(booking.serviceId);
+          setDate(formatDateForInput(bookingDate));
+          setTime(formatTimeForInput(bookingDate));
+
+          setOpen(true);
+        }}
+
         className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700"
       >
         Editar

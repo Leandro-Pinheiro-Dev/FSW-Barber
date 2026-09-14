@@ -444,13 +444,17 @@ const BarberDashboardPage = async () => {
 
                     <div className="lg:w-32">
                       <p className="font-medium text-white">
-                        {new Date(booking.date).toLocaleDateString("pt-BR")}
+                        {new Date(booking.date).toLocaleDateString("pt-BR", {
+                          timeZone: "America/Sao_Paulo",
+                        })}
                       </p>
 
                       <p className="mt-1 text-sm text-zinc-500">
                         {new Date(booking.date).toLocaleTimeString("pt-BR", {
+                          timeZone: "America/Sao_Paulo",
                           hour: "2-digit",
                           minute: "2-digit",
+                          hour12: false,
                         })}
                       </p>
                     </div>
