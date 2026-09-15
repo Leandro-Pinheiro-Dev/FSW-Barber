@@ -14,7 +14,7 @@ async function seedDatabase() {
       },
       update: {
         address: "Sebastião Batista de Oliveira - Conj. Hab. Sao Jose, 157",
-        phones: ["(11) 99881-1533"],
+        phones: ["(11) 99882-1533"],
         description:
           "Desde 2006, a Barbearia SpaçoVip faz parte da comunidade São José, construindo ao longo dos anos uma história de confiança, amizade e dedicação. Nossa experiência e técnica estão presentes em cada serviço, mas acreditamos que uma barbearia vai muito além de um bom corte. É também um lugar para encontrar amigos, dar boas risadas e compartilhar aquela resenha sobre música, futebol e tantos outros assuntos que fazem parte do nosso dia a dia. Aqui, todos são recebidos de braços abertos, com respeito, simplicidade e sem diferenças. Nosso compromisso é oferecer um excelente serviço aliado a um atendimento acolhedor, criando bons momentos e fazendo com que cada cliente se sinta em casa.",
       },
@@ -22,7 +22,7 @@ async function seedDatabase() {
         name: "Barbearia SpaçoVip",
         address: "Sebastião Batista de Oliveira - Conj. Hab. Sao Jose, 157",
         imageUrl: "https://pt.pngtree.com/free-backgrounds-photos/barbearia",
-        phones: ["(11) 99881-1533"],
+        phones: ["(11) 99882-1533"],
         description:
           "Desde 2006, a Barbearia SpaçoVip faz parte da comunidade São José, construindo ao longo dos anos uma história de confiança, amizade e dedicação. Nossa experiência e técnica estão presentes em cada serviço, mas acreditamos que uma barbearia vai muito além de um bom corte. É também um lugar para encontrar amigos, dar boas risadas e compartilhar aquela resenha sobre música, futebol e tantos outros assuntos que fazem parte do nosso dia a dia. Aqui, todos são recebidos de braços abertos, com respeito, simplicidade e sem diferenças. Nosso compromisso é oferecer um excelente serviço aliado a um atendimento acolhedor, criando bons momentos e fazendo com que cada cliente se sinta em casa.",
       },
