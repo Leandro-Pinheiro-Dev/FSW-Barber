@@ -41,6 +41,16 @@ const formatBrazilDate = (date: Date, options: Intl.DateTimeFormatOptions) => {
 // =====================================================
 
 const BookingItem = ({ booking }: BookingItemProps) => {
+  console.log("BOOKING CLIENTE:", {
+    id: booking.id,
+    date: booking.date,
+    iso: new Date(booking.date).toISOString(),
+    brazil: new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      dateStyle: "short",
+      timeStyle: "medium",
+    }).format(new Date(booking.date)),
+  });
   const isConfirmed = isFuture(booking.date);
 
   // ---------------------------------------------------
@@ -80,7 +90,7 @@ const BookingItem = ({ booking }: BookingItemProps) => {
   const formattedTime = formatBrazilDate(booking.date, {
     hour: "2-digit",
     minute: "2-digit",
-    hour12: false,
+    hourCycle: "h23",
   });
 
   // ---------------------------------------------------

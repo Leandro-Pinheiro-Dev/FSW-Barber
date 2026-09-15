@@ -1,6 +1,5 @@
 "use server";
 
-import { Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
 
 interface GetBookingsProps {
@@ -9,21 +8,12 @@ interface GetBookingsProps {
 
 export async function getBookings({ date }: GetBookingsProps) {
   // =====================================================
-  // DATA DO CALENDÁRIO
-  // =====================================================
-  //
-  // A data do agendamento é interpretada como calendário
-  // brasileiro.
-  //
+  // DATA NO FUSO DE SÃO PAULO
   // =====================================================
 
   const dateString = date.toLocaleDateString("en-CA", {
     timeZone: "America/Sao_Paulo",
   });
-
-  // =====================================================
-  // INÍCIO E FINAL DO DIA EM SÃO PAULO
-  // =====================================================
 
   const startOfDay = new Date(`${dateString}T00:00:00-03:00`);
 
@@ -40,7 +30,7 @@ export async function getBookings({ date }: GetBookingsProps) {
   // BUSCAR AGENDAMENTOS
   // =====================================================
 
-  return await db.booking.findMany({
+  const bookings = await db.booking.findMany({
     where: {
       date: {
         gte: startOfDay,
@@ -63,7 +53,69 @@ export async function getBookings({ date }: GetBookingsProps) {
         },
       },
 
-      service: true,
-    } satisfies Prisma.BookingInclude,
+      service: {
+        include: {
+          barbershop: true,
+        },
+      },
+    },
   });
+
+  // =====================================================
+  // CONVERTER DECIMAL PARA NUMBER
+  // =====================================================
+
+  const formattedBookings = bookings.map((booking) => {
+    const formattedBookingItems = booking.bookingItems.map((item) => ({
+      ...item,
+
+      price: Number(item.price),
+
+      service: {
+        ...item.service,
+        price: Number(item.service.price),
+      },
+    }));
+
+    return {
+      ...booking,
+
+      service: {
+        ...booking.service,
+
+        price: Number(booking.service.price),
+
+        barbershop: {
+          ...booking.service.barbershop,
+        },
+      },
+
+      bookingItems: formattedBookingItems,
+    };
+  });
+
+  // =====================================================
+  // DEBUG
+  // =====================================================
+
+  console.log("AGENDAMENTOS ENCONTRADOS:", formattedBookings.length);
+
+  formattedBookings.forEach((booking) => {
+    console.log({
+      id: booking.id,
+
+      date: booking.date.toISOString(),
+
+      service: booking.service.name,
+
+      price: booking.service.price,
+
+      bookingItems: booking.bookingItems.map((item) => ({
+        name: item.service.name,
+        price: item.price,
+      })),
+    });
+  });
+
+  return formattedBookings;
 }
