@@ -7,9 +7,6 @@ import { toast } from "sonner";
 import { getBarberSchedule } from "@/app/_actions/get-barber-schedule";
 
 import CreateBookingButton from "./create-booking-button";
-import EditBookingButton from "./edit-booking-button";
-import DeleteBookingButton from "./delete-booking-button";
-import CreateDebtButton from "./create-debt-button";
 
 // =====================================================
 // USUÁRIO
@@ -48,23 +45,14 @@ interface BookingService {
 
 interface Booking {
   id: string;
-
   userId: string | null;
-
   serviceId: string;
-
   date: Date;
-
   clientName: string | null;
-
   clientPhone?: string | null;
-
   serviceName: string;
-
   services: BookingService[];
-
   totalPrice: number;
-
   status: "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
 }
 
@@ -170,7 +158,6 @@ const BarberSchedule = ({
         const result = await getBarberSchedule(dateString);
 
         setBookings(result.bookings);
-
         setFixedSchedules(result.fixedSchedules);
       } catch (error) {
         console.error("ERRO AO CARREGAR AGENDA:", error);
@@ -178,7 +165,6 @@ const BarberSchedule = ({
         toast.error("Não foi possível carregar a agenda.");
 
         setBookings([]);
-
         setFixedSchedules([]);
       }
     });
@@ -314,7 +300,9 @@ const BarberSchedule = ({
               key={time}
               className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 md:flex-row md:items-center"
             >
-              {/* HORÁRIO */}
+              {/* =================================================
+                  HORÁRIO
+              ================================================= */}
 
               <div className="w-20 shrink-0 text-lg font-bold">{time}</div>
 
@@ -334,18 +322,19 @@ const BarberSchedule = ({
                 /* =================================================
                    AGENDAMENTO
                 ================================================= */
-                <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-3">
-                  {/* ================================================= */}
-                  {/* CLIENTE */}
-                  {/* ================================================= */}
+
+                <div className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 p-3">
+                  {/* =================================================
+                      CLIENTE
+                  ================================================= */}
 
                   <p className="font-semibold text-white">
                     {booking.clientName}
                   </p>
 
-                  {/* ================================================= */}
-                  {/* SERVIÇOS */}
-                  {/* ================================================= */}
+                  {/* =================================================
+                      SERVIÇOS
+                  ================================================= */}
 
                   <div className="mt-2 space-y-1">
                     {booking.services.map((service) => (
@@ -364,9 +353,9 @@ const BarberSchedule = ({
                     ))}
                   </div>
 
-                  {/* ================================================= */}
-                  {/* TOTAL */}
-                  {/* ================================================= */}
+                  {/* =================================================
+                      TOTAL
+                  ================================================= */}
 
                   <div className="mt-2 flex items-center justify-between border-t border-zinc-800 pt-2">
                     <span className="text-xs text-zinc-500">Total</span>
@@ -374,33 +363,6 @@ const BarberSchedule = ({
                     <span className="font-bold text-green-400">
                       R$ {booking.totalPrice.toFixed(2)}
                     </span>
-                  </div>
-
-                  {/* ================================================= */}
-                  {/* AÇÕES */}
-                  {/* ================================================= */}
-
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <CreateDebtButton
-                      bookingId={booking.id}
-                      amount={booking.totalPrice}
-                      serviceName={booking.serviceName}
-                    />
-
-                    <EditBookingButton
-                      booking={{
-                        id: booking.id,
-                        userId: booking.userId,
-                        clientName: booking.clientName,
-                        clientPhone: booking.clientPhone ?? null,
-                        serviceId: booking.serviceId,
-                        date: booking.date,
-                      }}
-                      users={users}
-                      services={services}
-                    />
-
-                    <DeleteBookingButton bookingId={booking.id} />
                   </div>
                 </div>
               ) : (
