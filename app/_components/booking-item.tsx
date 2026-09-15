@@ -1,80 +1,178 @@
-import { Prisma } from "@prisma/client";
-import { format, isFuture } from "date-fns";
-import { ptBR } from "date-fns/locale";
+"use client";
 
-import { Avatar, AvatarImage } from "./ui/avatar";
-import { Badge } from "./ui/badge";
-import { Card, CardContent } from "./ui/card";
+import { isFuture } from "date-fns";
+
+import Link from "next/link";
 
 interface BookingItemProps {
-  booking: Prisma.BookingGetPayload<{
-    include: {
-      service: {
-        include: {
-          barbershop: true;
-        };
-      };
+  booking: {
+    id: string;
+    date: Date;
+    service: {
+      name: string;
+      price: number;
     };
-  }>;
+    bookingItems?: {
+      id: string;
+      name: string;
+      price: number;
+      service?: {
+        name: string;
+        price: number;
+      };
+      barbershopName?: string;
+      barbershopImage?: string;
+    }[];
+  };
 }
+// =====================================================
+// FORMATAR DATA/HORA NO FUSO DO BRASIL
+// =====================================================
+
+const formatBrazilDate = (date: Date, options: Intl.DateTimeFormatOptions) => {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    ...options,
+  }).format(new Date(date));
+};
+
+// =====================================================
+// COMPONENTE
+// =====================================================
 
 const BookingItem = ({ booking }: BookingItemProps) => {
   const isConfirmed = isFuture(booking.date);
 
+  // ---------------------------------------------------
+  // DATA COMPLETA
+  // Exemplo: terça-feira, 15 de setembro
+  // ---------------------------------------------------
+
+  const formattedFullDate = formatBrazilDate(booking.date, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+
+  // ---------------------------------------------------
+  // MÊS
+  // Exemplo: set.
+  // ---------------------------------------------------
+
+  const formattedMonth = formatBrazilDate(booking.date, {
+    month: "short",
+  });
+
+  // ---------------------------------------------------
+  // DIA
+  // Exemplo: 15
+  // ---------------------------------------------------
+
+  const formattedDay = formatBrazilDate(booking.date, {
+    day: "2-digit",
+  });
+
+  // ---------------------------------------------------
+  // HORÁRIO
+  // Exemplo: 11:00
+  // ---------------------------------------------------
+
+  const formattedTime = formatBrazilDate(booking.date, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  // ---------------------------------------------------
+  // SERVIÇOS
+  // ---------------------------------------------------
+
+  const services =
+    booking.bookingItems && booking.bookingItems.length > 0
+      ? booking.bookingItems.map((item) => item.name).join(", ")
+      : booking.service.name;
+
+  // ---------------------------------------------------
+  // VALOR TOTAL
+  // ---------------------------------------------------
+
+  const totalPrice =
+    booking.bookingItems && booking.bookingItems.length > 0
+      ? booking.bookingItems.reduce(
+          (total, item) => total + Number(item.price),
+          0,
+        )
+      : Number(booking.service.price);
+
   return (
-    <Card className="w-full min-w-[85%] shrink-0 overflow-hidden sm:min-w-90 md:min-w-0">
-      <CardContent className="flex min-h-37.5 p-0">
-        {/* INFORMAÇÕES */}
-        <div className="flex min-w-0 flex-1 flex-col gap-2 p-4 sm:p-5">
-          <Badge
-            className="w-fit"
-            variant={isConfirmed ? "default" : "secondary"}
-          >
-            {isConfirmed ? "Confirmado" : "Finalizado"}
-          </Badge>
+    <div className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm">
+      {/* =================================================
+          CABEÇALHO
+      ================================================= */}
 
-          <h3 className="truncate text-sm font-semibold sm:text-base">
-            {booking.service.name}
-          </h3>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate font-semibold">{services}</h3>
 
-          <div className="flex min-w-0 items-center gap-2">
-            <Avatar className="h-7 w-7 shrink-0">
-              <AvatarImage
-                src="https://utfs.io/f/c97a2dc9-cf62-468b-a851-bfd2bdde775f-16p.png"
-                alt={booking.service.barbershop.name}
-              />
-            </Avatar>
+          <p className="mt-1 text-sm text-muted-foreground">
+            R$ {totalPrice.toFixed(2).replace(".", ",")}
+          </p>
+        </div>
 
-            <p className="truncate text-xs text-muted-foreground sm:text-sm">
-              {booking.service.barbershop.name}
+        {/* =================================================
+            STATUS
+        ================================================= */}
+
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+            isConfirmed
+              ? "bg-green-100 text-green-700"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {isConfirmed ? "Agendado" : "Concluído"}
+        </span>
+      </div>
+
+      {/* =================================================
+          DATA E HORÁRIO
+      ================================================= */}
+
+      <div className="flex items-center gap-3">
+        {/* CALENDÁRIO */}
+
+        <div className="flex w-14 shrink-0 flex-col items-center overflow-hidden rounded-lg border bg-background">
+          <div className="w-full bg-muted px-2 py-1 text-center">
+            <p className="text-xs font-medium uppercase text-muted-foreground">
+              {formattedMonth}
             </p>
           </div>
 
-          <p className="mt-auto text-xs text-muted-foreground">
-            {format(booking.date, "EEEE, d 'de' MMMM", {
-              locale: ptBR,
-            })}
-          </p>
+          <div className="px-2 py-2">
+            <p className="text-2xl font-bold leading-none">{formattedDay}</p>
+          </div>
         </div>
 
-        {/* DATA E HORÁRIO */}
-        <div className="flex w-20.5 shrink-0 flex-col items-center justify-center border-l bg-muted/20 px-3 sm:w-23.75">
-          <p className="text-xs capitalize text-muted-foreground">
-            {format(booking.date, "MMM", {
-              locale: ptBR,
-            })}
-          </p>
+        {/* INFORMAÇÕES */}
 
-          <p className="text-2xl font-bold leading-none sm:text-3xl">
-            {format(booking.date, "dd")}
-          </p>
+        <div className="min-w-0">
+          <p className="text-sm font-medium capitalize">{formattedFullDate}</p>
 
-          <p className="mt-1 text-sm font-medium">
-            {format(booking.date, "HH:mm")}
-          </p>
+          <p className="mt-1 text-sm font-semibold">{formattedTime}</p>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      {/* =================================================
+          LINK PARA DETALHES
+      ================================================= */}
+
+      <Link
+        href={`/bookings/${booking.id}`}
+        className="inline-flex h-10 w-full items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+      >
+        Ver detalhes
+      </Link>
+    </div>
   );
 };
 

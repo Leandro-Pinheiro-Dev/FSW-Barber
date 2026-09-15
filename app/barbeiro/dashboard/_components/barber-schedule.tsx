@@ -7,12 +7,9 @@ import { toast } from "sonner";
 import { getBarberSchedule } from "@/app/_actions/get-barber-schedule";
 
 import CreateBookingButton from "./create-booking-button";
-import EditBookingButton from "./edit-booking-button";
-import DeleteBookingButton from "./delete-booking-button";
-import CreateDebtButton from "./create-debt-button";
 
 // =====================================================
-// TIPOS
+// USUÁRIO
 // =====================================================
 
 interface User {
@@ -21,28 +18,57 @@ interface User {
   email: string | null;
 }
 
+// =====================================================
+// SERVIÇO
+// =====================================================
+
 interface Service {
   id: string;
   name: string;
   price: number;
 }
 
+// =====================================================
+// SERVIÇOS DO AGENDAMENTO
+// =====================================================
+
+interface BookingService {
+  id: string;
+  serviceId: string;
+  name: string;
+  price: number;
+}
+
+// =====================================================
+// AGENDAMENTO
+// =====================================================
+
 interface Booking {
   id: string;
   userId: string | null;
   serviceId: string;
   date: Date;
-  serviceName: string;
   clientName: string | null;
   clientPhone?: string | null;
+  serviceName: string;
+  services: BookingService[];
+  totalPrice: number;
   status: "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
 }
+
+// =====================================================
+// HORÁRIO FIXO
+// =====================================================
 
 interface FixedSchedule {
   id: string;
   time: string;
   clientName: string;
 }
+
+// =====================================================
+// PROPS
+// =====================================================
 
 interface BarberScheduleProps {
   initialDate?: Date;
@@ -51,7 +77,7 @@ interface BarberScheduleProps {
 }
 
 // =====================================================
-// HORÁRIOS
+// HORÁRIOS DISPONÍVEIS
 // =====================================================
 
 const TIME_LIST = [
@@ -132,7 +158,6 @@ const BarberSchedule = ({
         const result = await getBarberSchedule(dateString);
 
         setBookings(result.bookings);
-
         setFixedSchedules(result.fixedSchedules);
       } catch (error) {
         console.error("ERRO AO CARREGAR AGENDA:", error);
@@ -140,11 +165,11 @@ const BarberSchedule = ({
         toast.error("Não foi possível carregar a agenda.");
 
         setBookings([]);
-
         setFixedSchedules([]);
       }
     });
   }, []);
+
   // =====================================================
   // CARREGAR QUANDO A DATA MUDAR
   // =====================================================
@@ -174,7 +199,7 @@ const BarberSchedule = ({
   };
 
   // =====================================================
-  // FORMATAR DATA NA TELA
+  // FORMATAR DATA
   // =====================================================
 
   const formatDate = (date: Date) => {
@@ -261,7 +286,7 @@ const BarberSchedule = ({
       </div>
 
       {/* =================================================
-          SCROLL DOS HORÁRIOS
+          HORÁRIOS
       ================================================= */}
 
       <div className="max-h-162.5 space-y-3 overflow-y-auto pr-2">
@@ -275,7 +300,9 @@ const BarberSchedule = ({
               key={time}
               className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 md:flex-row md:items-center"
             >
-              {/* HORÁRIO */}
+              {/* =================================================
+                  HORÁRIO
+              ================================================= */}
 
               <div className="w-20 shrink-0 text-lg font-bold">{time}</div>
 
@@ -296,75 +323,46 @@ const BarberSchedule = ({
                    AGENDAMENTO
                 ================================================= */
 
-                <div className="flex flex-1 flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                  {/* CLIENTE */}
+                <div className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 p-3">
+                  {/* =================================================
+                      CLIENTE
+                  ================================================= */}
 
-                  <div>
-                    <p className="font-semibold text-white">
-                      {booking.clientName}
-                    </p>
+                  <p className="font-semibold text-white">
+                    {booking.clientName}
+                  </p>
 
-                    <p className="text-sm text-zinc-400">
-                      {booking.serviceName}
-                    </p>
+                  {/* =================================================
+                      SERVIÇOS
+                  ================================================= */}
+
+                  <div className="mt-2 space-y-1">
+                    {booking.services.map((service) => (
+                      <div
+                        key={service.id}
+                        className="flex items-center justify-between gap-2"
+                      >
+                        <span className="text-sm text-zinc-300">
+                          {service.name}
+                        </span>
+
+                        <span className="text-xs text-zinc-500">
+                          R$ {service.price.toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
                   </div>
 
-                  {/* STATUS */}
+                  {/* =================================================
+                      TOTAL
+                  ================================================= */}
 
-                  <div>
-                    {booking.status === "PENDING" && (
-                      <span className="rounded-full border border-yellow-500/30 bg-yellow-500/10 px-3 py-1 text-xs font-medium text-yellow-400">
-                        Pendente
-                      </span>
-                    )}
+                  <div className="mt-2 flex items-center justify-between border-t border-zinc-800 pt-2">
+                    <span className="text-xs text-zinc-500">Total</span>
 
-                    {booking.status === "CONFIRMED" && (
-                      <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-400">
-                        Confirmado
-                      </span>
-                    )}
-
-                    {booking.status === "COMPLETED" && (
-                      <span className="rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1 text-xs font-medium text-green-400">
-                        Concluído
-                      </span>
-                    )}
-
-                    {booking.status === "CANCELLED" && (
-                      <span className="rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-medium text-red-400">
-                        Cancelado
-                      </span>
-                    )}
-                  </div>
-
-                  {/* AÇÕES */}
-
-                  <div className="flex flex-wrap gap-2">
-                    <CreateDebtButton
-                      userId={booking.userId}
-                      bookingId={booking.id}
-                      amount={Number(
-                        services.find(
-                          (service) => service.id === booking.serviceId,
-                        )?.price ?? 0,
-                      )}
-                      serviceName={booking.serviceName}
-                    />
-
-                    <EditBookingButton
-                      booking={{
-                        id: booking.id,
-                        userId: booking.userId,
-                        clientName: booking.clientName,
-                        clientPhone: booking.clientPhone ?? null,
-                        serviceId: booking.serviceId,
-                        date: booking.date,
-                      }}
-                      users={users}
-                      services={services}
-                    />
-
-                    <DeleteBookingButton bookingId={booking.id} />
+                    <span className="font-bold text-green-400">
+                      R$ {booking.totalPrice.toFixed(2)}
+                    </span>
                   </div>
                 </div>
               ) : (

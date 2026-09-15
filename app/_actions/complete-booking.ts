@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 
 import { authOptions } from "@/lib/auth";
 
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
 
 interface CompleteBookingParams {
@@ -54,7 +55,7 @@ export const completeBooking = async ({
   //
   // =====================================================
 
-  await db.$transaction(async (tx) => {
+  await db.$transaction(async (tx: Prisma.TransactionClient) => {
     // ===================================================
     // BUSCAR AGENDAMENTO
     // ===================================================

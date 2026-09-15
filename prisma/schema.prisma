@@ -85,8 +85,10 @@ model BarbershopService {
   barbershopId String
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
-  barbershop   Barbershop @relation(fields: [barbershopId], references: [id])
+
+  barbershop   Barbershop  @relation(fields: [barbershopId], references: [id])
   bookings     Booking[]
+  bookingItems BookingService[]
 }
 
 model Booking {
@@ -101,13 +103,30 @@ model Booking {
   clientPhone           String?
   reminderSent          Boolean                @default(false)
   reminderSentAt        DateTime?
+
   service               BarbershopService      @relation(fields: [serviceId], references: [id])
+  bookingItems          BookingService[]
+
   user                  User?                  @relation(fields: [userId], references: [id])
   debts                 CustomerDebt[]
   financialTransactions FinancialTransaction[]
 
   @@index([date])
   @@index([reminderSent, date])
+}
+model BookingService {
+  id        String   @id @default(uuid())
+  bookingId String
+  serviceId String
+  price     Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+
+  booking Booking           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  service BarbershopService @relation(fields: [serviceId], references: [id])
+
+  @@unique([bookingId, serviceId])
+  @@index([bookingId])
+  @@index([serviceId])
 }
 
 model FixedSchedule {

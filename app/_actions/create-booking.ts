@@ -6,14 +6,14 @@ import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 
 interface CreateBookingParams {
-  serviceId: string;
+  serviceIds: string[];
   date: string;
   time: string;
   userId?: string;
 }
 
 export const createBooking = async ({
-  serviceId,
+  serviceIds,
   date,
   time,
   userId,
@@ -29,14 +29,25 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 2. DEFINIR O CLIENTE
+  // 2. VALIDAR SERVIÇOS
+  // =====================================================
+
+  if (!Array.isArray(serviceIds) || serviceIds.length === 0) {
+    throw new Error("Selecione pelo menos um serviço.");
+  }
+
+  // Remove possíveis IDs duplicados
+  const uniqueServiceIds = [...new Set(serviceIds)];
+
+  // =====================================================
+  // 3. DEFINIR O CLIENTE
   // =====================================================
 
   const bookingUserId =
     session.user.role === "BARBER" && userId ? userId : session.user.id;
 
   // =====================================================
-  // 3. VALIDAR DATA
+  // 4. VALIDAR DATA
   // =====================================================
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -44,7 +55,7 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 4. VALIDAR HORÁRIO
+  // 5. VALIDAR HORÁRIO
   // =====================================================
 
   if (!/^\d{2}:\d{2}$/.test(time)) {
@@ -58,34 +69,47 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 5. VERIFICAR SERVIÇO
+  // 6. BUSCAR OS SERVIÇOS
   // =====================================================
 
-  const service = await db.barbershopService.findUnique({
+  const services = await db.barbershopService.findMany({
     where: {
-      id: serviceId,
+      id: {
+        in: uniqueServiceIds,
+      },
     },
   });
 
-  if (!service) {
-    throw new Error("Serviço não encontrado.");
+  console.log("SERVICES:", services);
+
+  if (services.length !== uniqueServiceIds.length) {
+    throw new Error("Um ou mais serviços não foram encontrados.");
   }
 
   // =====================================================
-  // 6. DIA DA SEMANA
+  // 7. GARANTIR QUE TODOS OS SERVIÇOS SÃO DA MESMA
+  //    BARBEARIA
+  // =====================================================
+
+  const barbershopId = services[0].barbershopId;
+
+  const allFromSameBarbershop = services.every(
+    (service: { barbershopId: string }) =>
+      service.barbershopId === barbershopId,
+  );
+
+  if (!allFromSameBarbershop) {
+    throw new Error(
+      "Os serviços selecionados pertencem a barbearias diferentes.",
+    );
+  }
+
+  // =====================================================
+  // 8. DIA DA SEMANA
   //
   // Usamos explicitamente o horário de Brasília.
-  // Isso evita depender do timezone do servidor.
   // =====================================================
 
-  const selectedDate = new Date(`${date}T00:00:00-03:00`);
-
-  if (Number.isNaN(selectedDate.getTime())) {
-    throw new Error("Data inválida.");
-  }
-
-  // Para descobrir o dia da semana corretamente no Brasil,
-  // usamos a data original sem depender do timezone do servidor.
   const [year, month, day] = date.split("-").map(Number);
 
   const brazilDate = new Date(Date.UTC(year, month - 1, day, 3, 0, 0));
@@ -97,16 +121,16 @@ export const createBooking = async ({
   console.log("DATA:", date);
   console.log("HORÁRIO:", time);
   console.log("DIA DA SEMANA:", dayOfWeek);
-  console.log("SERVIÇO:", serviceId);
+  console.log("SERVIÇOS:", uniqueServiceIds);
   console.log("=================================");
 
   // =====================================================
-  // 7. VERIFICAR HORÁRIO FIXO
+  // 9. VERIFICAR HORÁRIO FIXO
   // =====================================================
 
   const fixedSchedule = await db.fixedSchedule.findFirst({
     where: {
-      barbershopId: service.barbershopId,
+      barbershopId,
       dayOfWeek,
       time,
       active: true,
@@ -120,13 +144,11 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 8. CRIAR DATA NO HORÁRIO DE BRASÍLIA
-  //
-  // IMPORTANTE:
-  // -03:00 = horário de Brasília
+  // 10. CRIAR DATA NO HORÁRIO DE BRASÍLIA
   //
   // Exemplo:
   // 2026-09-18 15:00 Brasil
+  //
   // será armazenado como:
   // 2026-09-18T18:00:00.000Z
   // =====================================================
@@ -138,7 +160,7 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 9. VERIFICAR SE O HORÁRIO JÁ ESTÁ OCUPADO
+  // 11. VERIFICAR SE O HORÁRIO JÁ ESTÁ OCUPADO
   // =====================================================
 
   const slotStart = new Date(bookingDate);
@@ -167,15 +189,41 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 10. CRIAR AGENDAMENTO
+  // 12. CRIAR O AGENDAMENTO
+  // =====================================================
+  //
+  // O Booking possui um serviceId legado para compatibilidade,
+  // mas os serviços realmente selecionados ficam em bookingItems.
   // =====================================================
 
   const booking = await db.booking.create({
     data: {
       userId: bookingUserId,
-      serviceId,
+
+      // Mantemos o primeiro serviço no campo legado.
+      serviceId: uniqueServiceIds[0],
+
       date: bookingDate,
+
       status: "PENDING",
+
+      // Salva TODOS os serviços selecionados no agendamento.
+      bookingItems: {
+        create: services.map((service) => ({
+          serviceId: service.id,
+          price: service.price,
+        })),
+      },
+    },
+
+    // IMPORTANTE:
+    // include fica FORA do data.
+    include: {
+      bookingItems: {
+        include: {
+          service: true,
+        },
+      },
     },
   });
 
@@ -183,12 +231,13 @@ export const createBooking = async ({
   console.log("AGENDAMENTO CRIADO");
   console.log("ID:", booking.id);
   console.log("CLIENTE:", bookingUserId);
+  console.log("SERVIÇOS:", uniqueServiceIds);
   console.log("DATA:", booking.date);
   console.log("STATUS:", booking.status);
   console.log("=================================");
 
   // =====================================================
-  // 11. ATUALIZAR CACHE
+  // 13. ATUALIZAR CACHE
   // =====================================================
 
   revalidatePath("/");

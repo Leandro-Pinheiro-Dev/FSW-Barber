@@ -1,5 +1,6 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
 
 interface GetBookingsProps {
@@ -8,20 +9,20 @@ interface GetBookingsProps {
 
 export async function getBookings({ date }: GetBookingsProps) {
   // =====================================================
-  // PEGAR A DATA ESCOLHIDA PELO CLIENTE
+  // DATA DO CALENDÁRIO
   // =====================================================
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  const dateString = `${year}-${month}-${day}`;
-
-  // =====================================================
-  // HORÁRIO DE BRASÍLIA
   //
-  // O Vercel pode estar em UTC.
-  // Por isso informamos explicitamente -03:00.
+  // A data do agendamento é interpretada como calendário
+  // brasileiro.
+  //
+  // =====================================================
+
+  const dateString = date.toLocaleDateString("en-CA", {
+    timeZone: "America/Sao_Paulo",
+  });
+
+  // =====================================================
+  // INÍCIO E FINAL DO DIA EM SÃO PAULO
   // =====================================================
 
   const startOfDay = new Date(`${dateString}T00:00:00-03:00`);
@@ -31,8 +32,8 @@ export async function getBookings({ date }: GetBookingsProps) {
   console.log("=================================");
   console.log("BUSCANDO AGENDAMENTOS");
   console.log("DATA:", dateString);
-  console.log("INÍCIO:", startOfDay);
-  console.log("FINAL:", endOfDay);
+  console.log("INÍCIO:", startOfDay.toISOString());
+  console.log("FINAL:", endOfDay.toISOString());
   console.log("=================================");
 
   // =====================================================
@@ -54,5 +55,15 @@ export async function getBookings({ date }: GetBookingsProps) {
     orderBy: {
       date: "asc",
     },
+
+    include: {
+      bookingItems: {
+        include: {
+          service: true,
+        },
+      },
+
+      service: true,
+    } satisfies Prisma.BookingInclude,
   });
 }
