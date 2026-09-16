@@ -4,10 +4,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 
-// =====================================================
-// TIPOS DOS SERVIÇOS
-// =====================================================
-
 export interface BarberScheduleService {
   id: string;
   serviceId: string;
@@ -15,31 +11,24 @@ export interface BarberScheduleService {
   price: number;
 }
 
-// =====================================================
-// TIPO DO AGENDAMENTO DEVOLVIDO PARA O FRONTEND
-// =====================================================
-
 export interface BarberScheduleBooking {
   id: string;
   userId: string | null;
   serviceId: string;
   date: Date;
-
   clientName: string | null;
   clientPhone: string | null;
 
   serviceName: string;
-
   services: BarberScheduleService[];
 
+  // Valores financeiros salvos no Booking
+  subtotal: number;
+  discount: number;
   totalPrice: number;
 
   status: "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
 }
-
-// =====================================================
-// TIPO DOS HORÁRIOS FIXOS
-// =====================================================
 
 export interface BarberFixedSchedule {
   id: string;
@@ -47,63 +36,42 @@ export interface BarberFixedSchedule {
   clientName: string;
 }
 
-// =====================================================
-// RETORNO DA ACTION
-// =====================================================
-
 export interface BarberScheduleResult {
   bookings: BarberScheduleBooking[];
   fixedSchedules: BarberFixedSchedule[];
 }
 
-// =====================================================
-// ACTION
-// =====================================================
-
 export const getBarberSchedule = async (
   date: string,
 ): Promise<BarberScheduleResult> => {
-  // =====================================================
-  // AUTENTICAÇÃO
-  // =====================================================
-
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
     throw new Error("Usuário não autenticado.");
   }
 
-  // =====================================================
-  // VERIFICAR BARBEIRO
-  // =====================================================
-
   if (session.user.role !== "BARBER") {
     throw new Error("Acesso permitido somente ao barbeiro.");
+  }
+
+  if (!date || typeof date !== "string") {
+    throw new Error("Data não informada.");
   }
 
   // =====================================================
   // VALIDAR DATA
   // =====================================================
 
-  if (!date || typeof date !== "string") {
-    throw new Error("Data não informada.");
-  }
-
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
 
   if (!match) {
     console.error("DATA RECEBIDA:", date);
-
     throw new Error("Formato de data inválido.");
   }
 
   const year = Number(match[1]);
   const month = Number(match[2]);
   const day = Number(match[3]);
-
-  // =====================================================
-  // VALIDAR DATA REAL
-  // =====================================================
 
   const validationDate = new Date(Date.UTC(year, month - 1, day));
 
@@ -113,27 +81,18 @@ export const getBarberSchedule = async (
     validationDate.getUTCDate() !== day
   ) {
     console.error("DATA INVÁLIDA:", date);
-
     throw new Error("Data inválida para consultar a agenda.");
   }
 
   // =====================================================
-  // DIA DA SEMANA
+  // DATA / DIA DA SEMANA
   // =====================================================
 
   const brazilDate = new Date(`${date}T12:00:00-03:00`);
 
   const dayOfWeek = brazilDate.getUTCDay();
 
-  // =====================================================
-  // INÍCIO DO DIA
-  // =====================================================
-
   const startOfDay = new Date(`${date}T00:00:00-03:00`);
-
-  // =====================================================
-  // FINAL DO DIA
-  // =====================================================
 
   const endOfDay = new Date(`${date}T23:59:59.999-03:00`);
 
@@ -164,12 +123,8 @@ export const getBarberSchedule = async (
     include: {
       user: true,
 
-      // Serviço antigo.
-      // Mantemos para compatibilidade.
       service: true,
 
-      // NOVO:
-      // Todos os serviços desse agendamento.
       bookingItems: {
         include: {
           service: true,
@@ -185,6 +140,31 @@ export const getBarberSchedule = async (
       date: "asc",
     },
   });
+
+  // =====================================================
+  // DEBUG
+  // =====================================================
+
+  console.log("=================================");
+  console.log("AGENDAMENTOS ENCONTRADOS:", bookings.length);
+
+  bookings.forEach((booking) => {
+    console.log({
+      id: booking.id,
+      date: booking.date,
+      status: booking.status,
+      clientName: booking.clientName,
+      userName: booking.user?.name,
+      serviceId: booking.serviceId,
+      bookingItems: booking.bookingItems.length,
+
+      subtotal: Number(booking.subtotal),
+      discount: Number(booking.discount),
+      total: Number(booking.total),
+    });
+  });
+
+  console.log("=================================");
 
   // =====================================================
   // BUSCAR HORÁRIOS FIXOS
@@ -206,9 +186,9 @@ export const getBarberSchedule = async (
   // =====================================================
 
   const formattedBookings: BarberScheduleBooking[] = bookings.map((booking) => {
-    // =================================================
+    // -------------------------------------------------
     // SERVIÇOS
-    // =================================================
+    // -------------------------------------------------
 
     const services: BarberScheduleService[] =
       booking.bookingItems.length > 0
@@ -227,26 +207,36 @@ export const getBarberSchedule = async (
             },
           ];
 
-    // =================================================
-    // TOTAL
-    // =================================================
+    // -------------------------------------------------
+    // VALORES FINANCEIROS
+    //
+    // IMPORTANTE:
+    // NÃO recalculamos o total somando os serviços.
+    //
+    // O Booking já possui:
+    //
+    // subtotal
+    // discount
+    // total
+    //
+    // Esses são os valores oficiais do agendamento.
+    // -------------------------------------------------
 
-    const totalPrice = services.reduce(
-      (sum: number, item: BarberScheduleService) => sum + item.price,
-      0,
-    );
+    const subtotal = Number(booking.subtotal);
 
-    // =================================================
+    const discount = Number(booking.discount);
+
+    const totalPrice = Number(booking.total);
+
+    // -------------------------------------------------
     // NOME DOS SERVIÇOS
-    // =================================================
+    // -------------------------------------------------
 
-    const serviceName = services
-      .map((item: BarberScheduleService) => item.name)
-      .join(" + ");
+    const serviceName = services.map((item) => item.name).join(" + ");
 
-    // =================================================
+    // -------------------------------------------------
     // CLIENTE
-    // =================================================
+    // -------------------------------------------------
 
     const clientName =
       booking.clientName ??
@@ -254,9 +244,9 @@ export const getBarberSchedule = async (
       booking.user?.email ??
       "Cliente";
 
-    // =================================================
+    // -------------------------------------------------
     // RETORNO
-    // =================================================
+    // -------------------------------------------------
 
     return {
       id: booking.id,
@@ -275,6 +265,10 @@ export const getBarberSchedule = async (
 
       services,
 
+      subtotal,
+
+      discount,
+
       totalPrice,
 
       status: booking.status,
@@ -282,23 +276,16 @@ export const getBarberSchedule = async (
   });
 
   // =====================================================
-  // FORMATAR HORÁRIOS FIXOS
-  // =====================================================
-
-  const formattedFixedSchedules: BarberFixedSchedule[] = fixedSchedules.map(
-    (schedule) => ({
-      id: schedule.id,
-      time: schedule.time,
-      clientName: schedule.clientName,
-    }),
-  );
-
-  // =====================================================
-  // RETORNAR
+  // RETORNO FINAL
   // =====================================================
 
   return {
     bookings: formattedBookings,
-    fixedSchedules: formattedFixedSchedules,
+
+    fixedSchedules: fixedSchedules.map((schedule) => ({
+      id: schedule.id,
+      time: schedule.time,
+      clientName: schedule.clientName,
+    })),
   };
 };

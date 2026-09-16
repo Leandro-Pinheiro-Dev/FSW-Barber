@@ -1,20 +1,15 @@
 import { db } from "@/lib/prisma";
-
 import Header from "../_components/header";
-
 import { getServerSession } from "next-auth";
-
 import { authOptions } from "@/lib/auth";
-
 import BookingItem from "../_components/booking-item";
-
 import LoginRequiredDialog from "../_components/login-required-dialog";
 
 const Bookings = async () => {
   const session = await getServerSession(authOptions);
 
   // =====================================================
-  // USUÁRIO NÃO LOGADO
+  // USUÁRIO NÃO AUTENTICADO
   // =====================================================
 
   if (!session?.user) {
@@ -26,30 +21,20 @@ const Bookings = async () => {
     );
   }
 
-  const now = new Date();
-
   // =====================================================
-  // AGENDAMENTOS FUTUROS
+  // AGENDAMENTOS CONFIRMADOS
+  // PENDING + CONFIRMED
   // =====================================================
 
   const confirmedBookings = await db.booking.findMany({
     where: {
       userId: session.user.id,
-
-      date: {
-        gte: now,
-      },
-
       status: {
-        not: "CANCELLED",
+        in: ["PENDING", "CONFIRMED"],
       },
     },
 
     include: {
-      // =================================================
-      // SERVIÇOS DO NOVO SISTEMA
-      // =================================================
-
       bookingItems: {
         include: {
           service: {
@@ -59,13 +44,6 @@ const Bookings = async () => {
           },
         },
       },
-
-      // =================================================
-      // SERVIÇO ANTIGO
-      //
-      // Mantido para compatibilidade com agendamentos
-      // criados antes do sistema de múltiplos serviços.
-      // =================================================
 
       service: {
         include: {
@@ -80,11 +58,7 @@ const Bookings = async () => {
   });
 
   // =====================================================
-  // FORMATAR AGENDAMENTOS FUTUROS
-  //
-  // Aqui:
-  // - Decimal -> number
-  // - bookingItems -> formato usado pelo BookingItem
+  // FORMATAR AGENDAMENTOS CONFIRMADOS
   // =====================================================
 
   const confirmedBookingsFormatted = confirmedBookings.map((booking) => ({
@@ -92,20 +66,27 @@ const Bookings = async () => {
 
     date: booking.date,
 
+    // IMPORTANTE:
+    // O status real vem do banco.
+    status: booking.status,
+
+    // Valores financeiros OFICIAIS salvos no Booking.
+    subtotal: Number(booking.subtotal),
+    discount: Number(booking.discount),
+    total: Number(booking.total),
+
     service: {
       id: booking.service.id,
-
       name: booking.service.name,
-
       price: Number(booking.service.price),
 
       barbershop: {
         name: booking.service.barbershop.name,
-
-        imageUrl: booking.service.barbershop.imageUrl,
+        image: booking.service.barbershop.imageUrl,
       },
     },
 
+    // Serviços do agendamento.
     bookingItems: booking.bookingItems.map((item) => ({
       id: item.id,
 
@@ -120,27 +101,17 @@ const Bookings = async () => {
   }));
 
   // =====================================================
-  // AGENDAMENTOS CONCLUÍDOS / PASSADOS
+  // AGENDAMENTOS FINALIZADOS
+  // COMPLETED
   // =====================================================
 
   const concludedBookings = await db.booking.findMany({
     where: {
       userId: session.user.id,
-
-      date: {
-        lt: now,
-      },
-
-      status: {
-        not: "CANCELLED",
-      },
+      status: "COMPLETED",
     },
 
     include: {
-      // =================================================
-      // SERVIÇOS DO NOVO SISTEMA
-      // =================================================
-
       bookingItems: {
         include: {
           service: {
@@ -150,10 +121,6 @@ const Bookings = async () => {
           },
         },
       },
-
-      // =================================================
-      // SERVIÇO ANTIGO
-      // =================================================
 
       service: {
         include: {
@@ -168,7 +135,7 @@ const Bookings = async () => {
   });
 
   // =====================================================
-  // FORMATAR AGENDAMENTOS CONCLUÍDOS
+  // FORMATAR AGENDAMENTOS FINALIZADOS
   // =====================================================
 
   const concludedBookingsFormatted = concludedBookings.map((booking) => ({
@@ -176,20 +143,27 @@ const Bookings = async () => {
 
     date: booking.date,
 
+    // IMPORTANTE:
+    // Também precisamos enviar o status aqui.
+    status: booking.status,
+
+    // Valores financeiros OFICIAIS salvos no Booking.
+    subtotal: Number(booking.subtotal),
+    discount: Number(booking.discount),
+    total: Number(booking.total),
+
     service: {
       id: booking.service.id,
-
       name: booking.service.name,
-
       price: Number(booking.service.price),
 
       barbershop: {
         name: booking.service.barbershop.name,
-
-        imageUrl: booking.service.barbershop.imageUrl,
+        image: booking.service.barbershop.imageUrl,
       },
     },
 
+    // Serviços do agendamento.
     bookingItems: booking.bookingItems.map((item) => ({
       id: item.id,
 
@@ -212,14 +186,10 @@ const Bookings = async () => {
       <Header />
 
       <div className="mx-auto w-full max-w-5xl p-5">
-        {/* =================================================
-            TÍTULO
-        ================================================= */}
-
         <h1 className="mb-6 text-xl font-bold">MEUS AGENDAMENTOS</h1>
 
         {/* =================================================
-            AGENDAMENTOS CONFIRMADOS
+            CONFIRMADOS
         ================================================= */}
 
         <div>
@@ -241,7 +211,7 @@ const Bookings = async () => {
         </div>
 
         {/* =================================================
-            AGENDAMENTOS FINALIZADOS
+            FINALIZADOS
         ================================================= */}
 
         <div className="mt-8">

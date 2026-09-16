@@ -1,11 +1,8 @@
 "use server";
 
 import { getServerSession } from "next-auth";
-
 import { revalidatePath } from "next/cache";
-
 import { authOptions } from "@/lib/auth";
-
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
 
@@ -19,7 +16,7 @@ export const completeBooking = async ({
   paymentType,
 }: CompleteBookingParams) => {
   // =====================================================
-  // AUTENTICAÇÃO
+  // VERIFICAR LOGIN
   // =====================================================
 
   const session = await getServerSession(authOptions);
@@ -29,7 +26,7 @@ export const completeBooking = async ({
   }
 
   // =====================================================
-  // AUTORIZAÇÃO
+  // SOMENTE BARBEIRO PODE CONCLUIR
   // =====================================================
 
   if (session.user.role !== "BARBER") {
@@ -39,51 +36,58 @@ export const completeBooking = async ({
   // =====================================================
   // TRANSAÇÃO
   // =====================================================
-  //
-  // A conclusão do atendimento e o registro financeiro
-  // precisam acontecer juntos.
-  //
-  // Assim evitamos situações como:
-  //
-  // Booking = COMPLETED
-  // mas pagamento não registrado.
-  //
-  // Ou:
-  //
-  // Booking = COMPLETED
-  // mas fiado não criado.
-  //
-  // =====================================================
 
   await db.$transaction(async (tx: Prisma.TransactionClient) => {
-    // ===================================================
-    // BUSCAR AGENDAMENTO
-    // ===================================================
-
+    // Buscar agendamento completo
     const booking = await tx.booking.findUnique({
       where: {
         id: bookingId,
       },
+
       include: {
         service: true,
+        bookingItems: {
+          include: {
+            service: true,
+          },
+        },
       },
     });
+
+    // =====================================================
+    // AGENDAMENTO NÃO EXISTE
+    // =====================================================
 
     if (!booking) {
       throw new Error("Agendamento não encontrado.");
     }
 
-    // ===================================================
-    // EVITAR DUPLICIDADE
-    // ===================================================
+    // =====================================================
+    // JÁ FOI CONCLUÍDO
+    // =====================================================
 
     if (booking.status === "COMPLETED") {
       throw new Error("Este agendamento já foi concluído.");
     }
 
-    // ===================================================
-    // CONCLUIR AGENDAMENTO
-    // ===================================================
+    // =====================================================
+    // VALOR OFICIAL DO AGENDAMENTO
+    //
+    // IMPORTANTE:
+    // Usamos booking.total porque ele já considera:
+    //
+    // - todos os serviços
+    // - subtotal
+    // - desconto
+    //
+    // Não usamos booking.service.price.
+    // =====================================================
+
+    const bookingTotal = Number(booking.total);
+
+    // =====================================================
+    // MARCAR AGENDAMENTO COMO CONCLUÍDO
+    // =====================================================
 
     const updatedBooking = await tx.booking.updateMany({
       where: {
@@ -98,17 +102,13 @@ export const completeBooking = async ({
       },
     });
 
-    // ===================================================
-    // PROTEÇÃO CONTRA DUPLO PROCESSAMENTO
-    // ===================================================
-
     if (updatedBooking.count === 0) {
       throw new Error("Este agendamento já foi concluído.");
     }
 
-    // ===================================================
+    // =====================================================
     // FIADO
-    // ===================================================
+    // =====================================================
 
     if (paymentType === "DEBT") {
       await tx.customerDebt.create({
@@ -116,32 +116,42 @@ export const completeBooking = async ({
           userId: booking.userId,
           bookingId: booking.id,
 
-          // Mantém os dados do cliente manual, quando
-          // existirem no Booking.
           clientName: booking.clientName,
           clientPhone: booking.clientPhone,
 
-          amount: booking.service.price,
+          // Valor REAL do agendamento
+          // já com desconto.
+          amount: bookingTotal,
 
           type: "DEBT",
 
-          description: `Fiado - ${booking.service.name}`,
+          description: `Fiado - ${
+            booking.bookingItems.length > 0
+              ? booking.bookingItems.map((item) => item.service.name).join(", ")
+              : booking.service.name
+          }`,
         },
       });
     }
 
-    // ===================================================
-    // PAGAMENTO NORMAL
-    // ===================================================
+    // =====================================================
+    // PAGAMENTO
+    // =====================================================
 
     if (paymentType === "PAID") {
       await tx.financialTransaction.create({
         data: {
-          amount: booking.service.price,
+          // Valor REAL do agendamento
+          // já considerando desconto.
+          amount: bookingTotal,
 
           type: "SERVICE_PAYMENT",
 
-          description: `Pagamento - ${booking.service.name}`,
+          description: `Pagamento - ${
+            booking.bookingItems.length > 0
+              ? booking.bookingItems.map((item) => item.service.name).join(", ")
+              : booking.service.name
+          }`,
 
           bookingId: booking.id,
 
@@ -153,16 +163,17 @@ export const completeBooking = async ({
   });
 
   // =====================================================
-  // ATUALIZAR DASHBOARD
+  // ATUALIZAR PÁGINAS
   // =====================================================
 
   revalidatePath("/barbeiro/dashboard");
 
-  revalidatePath("/");
+  // Importante:
+  // faz o cliente enxergar o agendamento como
+  // COMPLETED na área "Finalizados".
+  revalidatePath("/bookings");
 
-  // =====================================================
-  // RETORNO
-  // =====================================================
+  revalidatePath("/");
 
   return {
     success: true,

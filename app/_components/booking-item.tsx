@@ -1,17 +1,23 @@
 "use client";
 
-import { isFuture } from "date-fns";
-
 import Link from "next/link";
 
 interface BookingItemProps {
   booking: {
     id: string;
     date: Date;
+
+    status: "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
+
+    subtotal: number;
+    discount: number;
+    total: number;
+
     service: {
       name: string;
       price: number;
     };
+
     bookingItems?: {
       id: string;
       name: string;
@@ -25,6 +31,7 @@ interface BookingItemProps {
     }[];
   };
 }
+
 // =====================================================
 // FORMATAR DATA/HORA NO FUSO DO BRASIL
 // =====================================================
@@ -37,26 +44,21 @@ const formatBrazilDate = (date: Date, options: Intl.DateTimeFormatOptions) => {
 };
 
 // =====================================================
+// FORMATAR MOEDA
+// =====================================================
+
+const formatCurrency = (value: number) => {
+  return `R$ ${Number(value).toFixed(2).replace(".", ",")}`;
+};
+
+// =====================================================
 // COMPONENTE
 // =====================================================
 
 const BookingItem = ({ booking }: BookingItemProps) => {
-  console.log("BOOKING CLIENTE:", {
-    id: booking.id,
-    date: booking.date,
-    iso: new Date(booking.date).toISOString(),
-    brazil: new Intl.DateTimeFormat("pt-BR", {
-      timeZone: "America/Sao_Paulo",
-      dateStyle: "short",
-      timeStyle: "medium",
-    }).format(new Date(booking.date)),
-  });
-  const isConfirmed = isFuture(booking.date);
-
-  // ---------------------------------------------------
-  // DATA COMPLETA
-  // Exemplo: terça-feira, 15 de setembro
-  // ---------------------------------------------------
+  // ===================================================
+  // DATA
+  // ===================================================
 
   const formattedFullDate = formatBrazilDate(booking.date, {
     weekday: "long",
@@ -64,28 +66,13 @@ const BookingItem = ({ booking }: BookingItemProps) => {
     month: "long",
   });
 
-  // ---------------------------------------------------
-  // MÊS
-  // Exemplo: set.
-  // ---------------------------------------------------
-
   const formattedMonth = formatBrazilDate(booking.date, {
     month: "short",
   });
 
-  // ---------------------------------------------------
-  // DIA
-  // Exemplo: 15
-  // ---------------------------------------------------
-
   const formattedDay = formatBrazilDate(booking.date, {
     day: "2-digit",
   });
-
-  // ---------------------------------------------------
-  // HORÁRIO
-  // Exemplo: 11:00
-  // ---------------------------------------------------
 
   const formattedTime = formatBrazilDate(booking.date, {
     hour: "2-digit",
@@ -93,29 +80,45 @@ const BookingItem = ({ booking }: BookingItemProps) => {
     hourCycle: "h23",
   });
 
-  // ---------------------------------------------------
+  // ===================================================
   // SERVIÇOS
-  // ---------------------------------------------------
+  // ===================================================
 
   const services =
     booking.bookingItems && booking.bookingItems.length > 0
-      ? booking.bookingItems.map((item) => item.name).join(", ")
+      ? booking.bookingItems.map((item) => item.name).join(" + ")
       : booking.service.name;
 
-  // ---------------------------------------------------
-  // VALOR TOTAL
-  // ---------------------------------------------------
+  // ===================================================
+  // STATUS REAL DO BANCO
+  // ===================================================
 
-  const totalPrice =
-    booking.bookingItems && booking.bookingItems.length > 0
-      ? booking.bookingItems.reduce(
-          (total, item) => total + Number(item.price),
-          0,
-        )
-      : Number(booking.service.price);
+  const statusConfig = {
+    PENDING: {
+      label: "Pendente",
+      className: "bg-yellow-100 text-yellow-700",
+    },
+
+    CONFIRMED: {
+      label: "Agendado",
+      className: "bg-green-100 text-green-700",
+    },
+
+    COMPLETED: {
+      label: "Concluído",
+      className: "bg-blue-100 text-blue-700",
+    },
+
+    CANCELLED: {
+      label: "Cancelado",
+      className: "bg-red-100 text-red-700",
+    },
+  } as const;
+
+  const currentStatus = statusConfig[booking.status];
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm">
+    <div className="flex w-full min-w-[290px] max-w-sm flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm">
       {/* =================================================
           CABEÇALHO
       ================================================= */}
@@ -124,9 +127,25 @@ const BookingItem = ({ booking }: BookingItemProps) => {
         <div className="min-w-0">
           <h3 className="truncate font-semibold">{services}</h3>
 
-          <p className="mt-1 text-sm text-muted-foreground">
-            R$ {totalPrice.toFixed(2).replace(".", ",")}
-          </p>
+          {/* =============================================
+              VALORES
+          ============================================= */}
+
+          <div className="mt-2 space-y-0.5 text-sm">
+            <p className="text-muted-foreground">
+              Subtotal: {formatCurrency(booking.subtotal)}
+            </p>
+
+            {booking.discount > 0 && (
+              <p className="text-green-600">
+                Desconto: - {formatCurrency(booking.discount)}
+              </p>
+            )}
+
+            <p className="font-semibold">
+              Total: {formatCurrency(booking.total)}
+            </p>
+          </div>
         </div>
 
         {/* =================================================
@@ -134,13 +153,9 @@ const BookingItem = ({ booking }: BookingItemProps) => {
         ================================================= */}
 
         <span
-          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
-            isConfirmed
-              ? "bg-green-100 text-green-700"
-              : "bg-muted text-muted-foreground"
-          }`}
+          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${currentStatus.className}`}
         >
-          {isConfirmed ? "Agendado" : "Concluído"}
+          {currentStatus.label}
         </span>
       </div>
 
@@ -173,7 +188,7 @@ const BookingItem = ({ booking }: BookingItemProps) => {
       </div>
 
       {/* =================================================
-          LINK PARA DETALHES
+          DETALHES
       ================================================= */}
 
       <Link
