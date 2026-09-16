@@ -173,18 +173,6 @@ const CreateBookingButton = ({
     }
 
     // ===================================================
-    // DATA + HORÁRIO
-    // ===================================================
-
-    const selectedDate = new Date(`${date}T${time}:00`);
-
-    if (Number.isNaN(selectedDate.getTime())) {
-      toast.error("Data ou horário inválido.");
-
-      return;
-    }
-
-    // ===================================================
     // ENVIAR PARA O SERVIDOR
     // ===================================================
 
@@ -193,7 +181,9 @@ const CreateBookingButton = ({
         const result = await createBookingByBarber({
           serviceIds: selectedServiceIds,
 
-          date: selectedDate,
+          date,
+
+          time,
 
           userId: clientType === "registered" ? userId : undefined,
 
