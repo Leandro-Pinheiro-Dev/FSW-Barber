@@ -656,6 +656,7 @@ BOTÃO DO CARRINHO
                   disabled={{
                     before: today,
                     after: maxDate,
+                    dayOfWeek: [0, 1], // Bloqueia domingo e segunda-feira
                   }}
                   locale={ptBR}
                   className="rounded-md border"

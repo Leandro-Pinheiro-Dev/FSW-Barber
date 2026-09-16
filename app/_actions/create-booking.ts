@@ -77,7 +77,72 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 6. BUSCAR OS SERVIÇOS NO BANCO
+  // 6. REGRA OFICIAL DE FUNCIONAMENTO
+  // =====================================================
+  //
+  // A barbearia atende somente:
+  //
+  // TERÇA A SÁBADO
+  //
+  // Domingo = 0
+  // Segunda = 1
+  // Terça = 2
+  // Quarta = 3
+  // Quinta = 4
+  // Sexta = 5
+  // Sábado = 6
+  //
+  // Horários:
+  //
+  // 08:00 até 11:00
+  // 13:00 até 20:00
+  //
+  // 12:00 fica bloqueado para almoço.
+
+  const [year, month, day] = date.split("-").map(Number);
+
+  /*
+   * Criamos uma data UTC apenas para descobrir
+   * corretamente o dia da semana da data informada.
+   *
+   * Usamos meio-dia UTC para evitar problemas de mudança
+   * de dia causados pelo fuso horário.
+   */
+  const dateForDayOfWeek = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+
+  if (Number.isNaN(dateForDayOfWeek.getTime())) {
+    throw new Error("Data inválida.");
+  }
+
+  const dayOfWeek = dateForDayOfWeek.getUTCDay();
+
+  // Domingo e segunda-feira não possuem atendimento.
+  if (dayOfWeek === 0 || dayOfWeek === 1) {
+    throw new Error("A barbearia funciona somente de terça a sábado.");
+  }
+
+  // Horários oficialmente permitidos.
+  const allowedTimes = [
+    "08:00",
+    "09:00",
+    "10:00",
+    "11:00",
+    "13:00",
+    "14:00",
+    "15:00",
+    "16:00",
+    "17:00",
+    "18:00",
+    "19:00",
+    "20:00",
+  ];
+
+  if (!allowedTimes.includes(time)) {
+    throw new Error("Este horário não está disponível para agendamento.");
+  }
+
+  // =====================================================
+  // 7. BUSCAR OS SERVIÇOS NO BANCO
   // =====================================================
 
   const services = await db.barbershopService.findMany({
@@ -88,13 +153,13 @@ export const createBooking = async ({
     },
   });
 
-  // Verifica se todos os serviços realmente existem
+  // Verifica se todos os serviços realmente existem.
   if (services.length !== uniqueServiceIds.length) {
     throw new Error("Um ou mais serviços não foram encontrados.");
   }
 
   // =====================================================
-  // 7. GARANTIR QUE OS SERVIÇOS SÃO DA MESMA BARBEARIA
+  // 8. GARANTIR QUE OS SERVIÇOS SÃO DA MESMA BARBEARIA
   // =====================================================
 
   const barbershopId = services[0].barbershopId;
@@ -110,7 +175,7 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 8. CALCULAR DESCONTO NO SERVIDOR
+  // 9. CALCULAR DESCONTO NO SERVIDOR
   // =====================================================
 
   // O desconto é calculado novamente no servidor.
@@ -137,28 +202,6 @@ export const createBooking = async ({
   );
 
   // =====================================================
-  // 9. DATA DO AGENDAMENTO
-  // =====================================================
-
-  const [year, month, day] = date.split("-").map(Number);
-
-  /*
-   * Cria uma data considerando o horário do Brasil.
-   *
-   * Exemplo:
-   *
-   * 2026-09-19 + 10:00
-   *
-   * será tratado como:
-   *
-   * 19/09/2026 às 10:00 no horário de São Paulo.
-   */
-
-  const brazilDate = new Date(Date.UTC(year, month - 1, day, 3, 0, 0));
-
-  const dayOfWeek = brazilDate.getUTCDay();
-
-  // =====================================================
   // 10. VERIFICAR HORÁRIO FIXO
   // =====================================================
 
@@ -180,6 +223,18 @@ export const createBooking = async ({
   // =====================================================
   // 11. CRIAR DATA COMPLETA DO AGENDAMENTO
   // =====================================================
+
+  /*
+   * O horário informado é tratado como horário de São Paulo.
+   *
+   * Exemplo:
+   *
+   * 2026-09-19 + 10:00
+   *
+   * será:
+   *
+   * 19/09/2026 às 10:00 no horário de São Paulo.
+   */
 
   const bookingDate = new Date(`${date}T${time}:00-03:00`);
 
@@ -234,14 +289,6 @@ export const createBooking = async ({
       // =================================================
       // VALORES FINANCEIROS DO AGENDAMENTO
       // =================================================
-      //
-      // IMPORTANTE:
-      //
-      // Agora os valores calculados pelo servidor são
-      // realmente gravados no banco.
-      //
-      // Isso permite que o Dashboard continue mostrando
-      // o desconto mesmo depois de atualizar a página.
 
       subtotal: discountResult.subtotal,
       discount: discountResult.discount,
