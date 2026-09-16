@@ -30,9 +30,15 @@ type DashboardBooking = {
   clientName: string | null;
   clientPhone: string | null;
   status: "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
+
   serviceName: string;
   servicePrice: number;
+
+  // Valores financeiros salvos no Booking
+  subtotal: number;
+  discount: number;
   total: number;
+
   bookingItems: DashboardBookingItem[];
 };
 
@@ -43,6 +49,10 @@ type DashboardService = {
 };
 
 const BarberDashboardPage = async () => {
+  // =====================================================
+  // AUTENTICAÇÃO
+  // =====================================================
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
@@ -53,34 +63,54 @@ const BarberDashboardPage = async () => {
     redirect("/");
   }
 
+  // =====================================================
+  // RESUMO FINANCEIRO
+  // =====================================================
+
   const dashboardSummary = await getDashboardSummary();
+
+  // =====================================================
+  // BUSCAR AGENDAMENTOS
+  // =====================================================
 
   const bookingsData = await db.booking.findMany({
     include: {
       user: true,
+
       service: true,
+
       bookingItems: {
         include: {
           service: true,
         },
       },
     },
+
     orderBy: {
       date: "asc",
     },
   });
+
+  // =====================================================
+  // TRANSFORMAR AGENDAMENTOS PARA O DASHBOARD
+  // =====================================================
 
   const bookings: DashboardBooking[] = bookingsData.map((booking) => {
     const items = booking.bookingItems as Array<{
       id: string;
       serviceId: string;
       price: unknown;
+
       service: {
         id: string;
         name: string;
         price: unknown;
       };
     }>;
+
+    // ===================================================
+    // SERVIÇOS DO AGENDAMENTO
+    // ===================================================
 
     const bookingItems: DashboardBookingItem[] =
       items.length > 0
@@ -99,43 +129,101 @@ const BarberDashboardPage = async () => {
             },
           ];
 
-    const total: number = bookingItems.reduce(
+    // ===================================================
+    // SOMA DOS SERVIÇOS
+    //
+    // Esse valor serve como fallback para agendamentos
+    // antigos que ainda não possuem total salvo.
+    // ===================================================
+
+    const calculatedSubtotal = bookingItems.reduce(
       (sum: number, item: DashboardBookingItem) => sum + item.price,
       0,
     );
 
-    const serviceName: string = bookingItems
+    // ===================================================
+    // VALORES SALVOS NO BOOKING
+    //
+    // Novos agendamentos devem possuir:
+    //
+    // subtotal = soma dos serviços
+    // discount = desconto do combo
+    // total    = subtotal - discount
+    //
+    // Para agendamentos antigos, usamos fallback.
+    // ===================================================
+
+    const savedSubtotal = Number(booking.subtotal);
+    const savedDiscount = Number(booking.discount);
+    const savedTotal = Number(booking.total);
+
+    const subtotal = savedSubtotal > 0 ? savedSubtotal : calculatedSubtotal;
+
+    const discount = savedDiscount > 0 ? savedDiscount : 0;
+
+    const total =
+      savedTotal > 0 ? savedTotal : Math.max(0, subtotal - discount);
+
+    // ===================================================
+    // NOME DOS SERVIÇOS
+    // ===================================================
+
+    const serviceName = bookingItems
       .map((item: DashboardBookingItem) => item.name)
       .join(" + ");
 
     return {
       id: booking.id,
+
       userId: booking.userId,
+
       serviceId: booking.serviceId,
+
       date: booking.date,
+
       clientName: booking.clientName ?? booking.user?.name ?? null,
+
       clientPhone: booking.clientPhone,
+
       status: booking.status,
+
       serviceName,
+
       servicePrice: Number(booking.service.price),
+
+      subtotal,
+
+      discount,
+
       total,
+
       bookingItems,
     };
   });
+
+  // =====================================================
+  // CLIENTES CADASTRADOS
+  // =====================================================
 
   const users = await db.user.findMany({
     where: {
       role: "CUSTOMER",
     },
+
     select: {
       id: true,
       name: true,
       email: true,
     },
+
     orderBy: {
       name: "asc",
     },
   });
+
+  // =====================================================
+  // SERVIÇOS
+  // =====================================================
 
   const servicesData = await db.barbershopService.findMany({
     select: {
@@ -143,6 +231,7 @@ const BarberDashboardPage = async () => {
       name: true,
       price: true,
     },
+
     orderBy: {
       name: "asc",
     },
@@ -154,6 +243,10 @@ const BarberDashboardPage = async () => {
     price: Number(service.price),
   }));
 
+  // =====================================================
+  // MÊS ATUAL
+  // =====================================================
+
   const now = new Date();
 
   const currentMonth = now.toLocaleDateString("pt-BR", {
@@ -161,9 +254,17 @@ const BarberDashboardPage = async () => {
     year: "numeric",
   });
 
+  // =====================================================
+  // RENDER
+  // =====================================================
+
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        {/* =================================================
+            HEADER
+        ================================================= */}
+
         <header className="mb-8 flex flex-col gap-5 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-xl backdrop-blur sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="mb-1 text-sm font-medium text-zinc-500">
@@ -181,6 +282,10 @@ const BarberDashboardPage = async () => {
 
           <LogoutButton />
         </header>
+
+        {/* =================================================
+            RESUMO FINANCEIRO
+        ================================================= */}
 
         <section className="mb-8">
           <div className="mb-4">
@@ -237,6 +342,10 @@ const BarberDashboardPage = async () => {
           </div>
         </section>
 
+        {/* =================================================
+            SERVIÇOS / FIADO RECEBIDOS
+        ================================================= */}
+
         <section className="mb-8">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 shadow-lg">
@@ -257,11 +366,17 @@ const BarberDashboardPage = async () => {
           </div>
         </section>
 
+        {/* =================================================
+            CARDS
+        ================================================= */}
+
         <section className="mb-8">
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 shadow-lg">
               <p className="text-sm text-zinc-500">Agendamentos</p>
+
               <p className="mt-2 text-3xl font-bold">{bookings.length}</p>
+
               <p className="mt-1 text-xs text-zinc-600">
                 Agendamentos registrados
               </p>
@@ -269,17 +384,25 @@ const BarberDashboardPage = async () => {
 
             <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 shadow-lg">
               <p className="text-sm text-zinc-500">Clientes</p>
+
               <p className="mt-2 text-3xl font-bold">{users.length}</p>
+
               <p className="mt-1 text-xs text-zinc-600">Clientes cadastrados</p>
             </div>
 
             <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 shadow-lg">
               <p className="text-sm text-zinc-500">Serviços</p>
+
               <p className="mt-2 text-3xl font-bold">{services.length}</p>
+
               <p className="mt-1 text-xs text-zinc-600">Serviços disponíveis</p>
             </div>
           </div>
         </section>
+
+        {/* =================================================
+            SERVIÇOS E PREÇOS
+        ================================================= */}
 
         <section className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 shadow-xl sm:p-6">
           <div className="mb-6">
@@ -311,6 +434,10 @@ const BarberDashboardPage = async () => {
             ))}
           </div>
         </section>
+
+        {/* =================================================
+            AGENDAMENTOS
+        ================================================= */}
 
         <section className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 shadow-xl sm:p-6">
           <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -345,6 +472,10 @@ const BarberDashboardPage = async () => {
                   className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 transition hover:border-zinc-700"
                 >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    {/* =========================================
+                        CLIENTE
+                    ========================================= */}
+
                     <div className="min-w-0 lg:w-44">
                       <p className="truncate font-semibold text-white">
                         {booking.clientName ?? "Cliente não identificado"}
@@ -355,7 +486,11 @@ const BarberDashboardPage = async () => {
                       </p>
                     </div>
 
-                    <div className="min-w-0 lg:w-56">
+                    {/* =========================================
+                        SERVIÇOS + DESCONTO
+                    ========================================= */}
+
+                    <div className="min-w-0 lg:w-64">
                       <p className="mb-1 text-xs font-medium uppercase text-zinc-600">
                         Serviços
                       </p>
@@ -379,16 +514,56 @@ const BarberDashboardPage = async () => {
                         )}
                       </div>
 
-                      {booking.bookingItems.length > 1 && (
-                        <div className="mt-2 flex items-center justify-between border-t border-zinc-800 pt-2">
-                          <span className="text-xs text-zinc-500">Total</span>
+                      {/* =======================================
+                          MOSTRAR RESUMO FINANCEIRO
+                      ======================================= */}
 
-                          <span className="font-bold text-green-400">
-                            R$ {booking.total.toFixed(2)}
-                          </span>
+                      {booking.bookingItems.length > 1 && (
+                        <div className="mt-3 border-t border-zinc-800 pt-2">
+                          {/* SUBTOTAL */}
+
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-zinc-500">
+                              Subtotal
+                            </span>
+
+                            <span className="text-sm text-zinc-400">
+                              R$ {booking.subtotal.toFixed(2)}
+                            </span>
+                          </div>
+
+                          {/* DESCONTO */}
+
+                          {booking.discount > 0 && (
+                            <div className="mt-1 flex items-center justify-between">
+                              <span className="text-xs font-medium text-emerald-400">
+                                Desconto
+                              </span>
+
+                              <span className="text-sm font-medium text-emerald-400">
+                                - R$ {booking.discount.toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* TOTAL */}
+
+                          <div className="mt-1 flex items-center justify-between">
+                            <span className="text-xs font-semibold text-zinc-300">
+                              Total
+                            </span>
+
+                            <span className="font-bold text-green-400">
+                              R$ {booking.total.toFixed(2)}
+                            </span>
+                          </div>
                         </div>
                       )}
                     </div>
+
+                    {/* =========================================
+                        DATA / HORA
+                    ========================================= */}
 
                     <div className="lg:w-32">
                       <p className="font-medium text-white">
@@ -407,12 +582,20 @@ const BarberDashboardPage = async () => {
                       </p>
                     </div>
 
+                    {/* =========================================
+                        STATUS
+                    ========================================= */}
+
                     <div>
                       <BookingStatusButton
                         bookingId={booking.id}
                         status={booking.status}
                       />
                     </div>
+
+                    {/* =========================================
+                        AÇÕES
+                    ========================================= */}
 
                     <div className="flex flex-wrap gap-2">
                       <EditBookingButton
@@ -437,9 +620,17 @@ const BarberDashboardPage = async () => {
           )}
         </section>
 
+        {/* =================================================
+            AGENDA FIXA
+        ================================================= */}
+
         <section className="mb-8">
           <BarberSchedule users={users} services={services} />
         </section>
+
+        {/* =================================================
+            FIADOS
+        ================================================= */}
 
         <section className="mb-8">
           <CustomerDebts users={users} />
@@ -448,5 +639,4 @@ const BarberDashboardPage = async () => {
     </main>
   );
 };
-
 export default BarberDashboardPage;

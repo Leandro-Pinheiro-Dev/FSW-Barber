@@ -57,16 +57,6 @@ interface Booking {
 }
 
 // =====================================================
-// HORÁRIO FIXO
-// =====================================================
-
-interface FixedSchedule {
-  id: string;
-  time: string;
-  clientName: string;
-}
-
-// =====================================================
 // PROPS
 // =====================================================
 
@@ -112,7 +102,12 @@ const BarberSchedule = ({
 
   const [bookings, setBookings] = useState<Booking[]>([]);
 
-  const [fixedSchedules, setFixedSchedules] = useState<FixedSchedule[]>([]);
+  const [fixedSchedules, setFixedSchedules] = useState<
+    {
+      clientName: string;
+      time: string;
+    }[]
+  >([]);
 
   const [isPending, startTransition] = useTransition();
 

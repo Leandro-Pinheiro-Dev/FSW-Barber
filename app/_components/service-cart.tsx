@@ -1,100 +1,131 @@
 "use client";
 
-import {
-  createContext,
-  ReactNode,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { createContext, ReactNode, useContext, useMemo, useState } from "react";
 
-import { Booking } from "@prisma/client";
-
-import { formatDate } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { toast } from "sonner";
 
 import { Calendar } from "./ui/calendar";
 import { Card, CardContent } from "./ui/card";
+import { Button } from "./ui/button";
+
 import {
   Sheet,
   SheetContent,
-  SheetFooter,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
 } from "./ui/sheet";
 
-import { Button } from "@/app/_components/ui/button";
+import {
+  CalendarDays,
+  Check,
+  Clock,
+  Minus,
+  ShoppingCart,
+  Trash2,
+} from "lucide-react";
 
-import { ShoppingCartIcon, Trash2Icon } from "lucide-react";
+import { createBooking } from "@/app/_actions/create-booking";
+import { getBookings } from "@/app/_actions/get-bookings";
+import { getFixedSchedules } from "@/app/_actions/get-fixed-schedules";
 
-import { toast } from "sonner";
+import { calculateBookingDiscount } from "@/app/utils/booking-discount";
 
-import { createBooking } from "../_actions/create-booking";
-import { getBookings } from "../_actions/get-bookings";
-import { getFixedSchedules } from "../_actions/get-fixed-schedules";
+// =====================================================
+// TIPOS
+// =====================================================
 
-import SignInDialog from "./sign-in-dialog";
-import { Dialog, DialogContent } from "./ui/dialog";
-
-export interface CartService {
+interface Service {
   id: string;
   name: string;
-  description: string;
-  imageUrl: string;
   price: number;
-  barbershopId: string;
 }
 
-interface ServiceCartContextType {
-  services: CartService[];
-  addService: (service: CartService) => void;
+interface ServiceCartContextData {
+  services: Service[];
+
+  addService: (service: Service) => void;
+
   removeService: (serviceId: string) => void;
+
   clearCart: () => void;
+
   isInCart: (serviceId: string) => boolean;
+
   total: number;
 }
 
-const ServiceCartContext = createContext<ServiceCartContextType | undefined>(
-  undefined,
-);
+// =====================================================
+// CONTEXTO
+// =====================================================
 
-interface ServiceCartProviderProps {
-  children: ReactNode;
-}
+const ServiceCartContext = createContext<ServiceCartContextData | null>(null);
 
-export function ServiceCartProvider({ children }: ServiceCartProviderProps) {
-  const [services, setServices] = useState<CartService[]>([]);
+// =====================================================
+// PROVIDER
+// =====================================================
 
-  const addService = (service: CartService) => {
-    setServices((current) => {
-      if (current.some((item) => item.id === service.id)) {
-        return current;
+export function ServiceCartProvider({ children }: { children: ReactNode }) {
+  const [services, setServices] = useState<Service[]>([]);
+
+  // ---------------------------------------------------
+  // ADICIONAR SERVIÇO
+  // ---------------------------------------------------
+
+  const addService = (service: Service) => {
+    setServices((currentServices) => {
+      const alreadyExists = currentServices.some(
+        (item) => item.id === service.id,
+      );
+
+      if (alreadyExists) {
+        return currentServices;
       }
 
-      return [...current, service];
+      return [...currentServices, service];
     });
   };
 
+  // ---------------------------------------------------
+  // REMOVER SERVIÇO
+  // ---------------------------------------------------
+
   const removeService = (serviceId: string) => {
-    setServices((current) =>
-      current.filter((service) => service.id !== serviceId),
+    setServices((currentServices) =>
+      currentServices.filter((service) => service.id !== serviceId),
     );
   };
+
+  // ---------------------------------------------------
+  // LIMPAR CARRINHO
+  // ---------------------------------------------------
 
   const clearCart = () => {
     setServices([]);
   };
 
+  // ---------------------------------------------------
+  // VERIFICAR SE ESTÁ NO CARRINHO
+  // ---------------------------------------------------
+
   const isInCart = (serviceId: string) => {
     return services.some((service) => service.id === serviceId);
   };
 
+  // ---------------------------------------------------
+  // SUBTOTAL
+  //
+  // Mantemos "total" no contexto porque outros
+  // componentes podem estar utilizando esse valor.
+  //
+  // O desconto é calculado separadamente pela função
+  // calculateBookingDiscount().
+  // ---------------------------------------------------
+
   const total = useMemo(() => {
-    return services.reduce((sum, service) => {
-      return sum + Number(service.price);
-    }, 0);
+    return services.reduce((sum, service) => sum + Number(service.price), 0);
   }, [services]);
 
   return (
@@ -113,28 +144,63 @@ export function ServiceCartProvider({ children }: ServiceCartProviderProps) {
   );
 }
 
+// =====================================================
+// HOOK
+// =====================================================
+
 export function useServiceCart() {
   const context = useContext(ServiceCartContext);
 
   if (!context) {
     throw new Error(
-      "useServiceCart deve ser usado dentro de ServiceCartProvider.",
+      "useServiceCart deve ser utilizado dentro de ServiceCartProvider.",
     );
   }
 
   return context;
 }
 
-interface FixedSchedule {
-  time: string;
-  clientName: string;
+// =====================================================
+// TIPOS DOS AGENDAMENTOS
+// =====================================================
+
+interface BookingData {
+  date: Date;
 }
+
+// =====================================================
+// TIPOS DOS HORÁRIOS FIXOS
+//
+// IMPORTANTE:
+//
+// getFixedSchedules() NÃO retorna o objeto completo
+// FixedSchedule do Prisma.
+//
+// Ele retorna somente:
+//
+// {
+//   clientName: string;
+//   time: string;
+// }
+//
+// Por isso não devemos tipar como FixedSchedule.
+// =====================================================
+
+interface FixedScheduleData {
+  clientName: string;
+  time: string;
+}
+
+// =====================================================
+// HORÁRIOS DISPONÍVEIS
+// =====================================================
 
 const TIME_LIST = [
   "08:00",
   "09:00",
   "10:00",
   "11:00",
+  "12:00",
   "13:00",
   "14:00",
   "15:00",
@@ -143,26 +209,11 @@ const TIME_LIST = [
   "18:00",
   "19:00",
   "20:00",
-  "21:00",
 ];
 
-const getTimeList = (bookings: Booking[], fixedSchedules: FixedSchedule[]) => {
-  return TIME_LIST.filter((time) => {
-    const [hour, minutes] = time.split(":").map(Number);
-
-    const hasBookingOnCurrentTime = bookings.some(
-      (booking) =>
-        booking.date.getHours() === hour &&
-        booking.date.getMinutes() === minutes,
-    );
-
-    const hasFixedSchedule = fixedSchedules.some(
-      (schedule) => schedule.time === time,
-    );
-
-    return !hasBookingOnCurrentTime && !hasFixedSchedule;
-  });
-};
+// =====================================================
+// COMPONENTE PRINCIPAL
+// =====================================================
 
 interface ServiceCartProps {
   barbershopId: string;
@@ -173,390 +224,610 @@ export function ServiceCart({
   barbershopId,
   barbershopName,
 }: ServiceCartProps) {
-  const { services, removeService, clearCart, total } = useServiceCart();
+  const { services, removeService, clearCart } = useServiceCart();
 
-  const [cartOpen, setCartOpen] = useState(false);
+  // ---------------------------------------------------
+  // ESTADOS
+  // ---------------------------------------------------
 
-  const [signInDialogIsOpen, setSignInDialogIsOpen] = useState(false);
+  const [open, setOpen] = useState(false);
 
-  const [selectedDay, setSelectedDay] = useState<Date | undefined>(undefined);
+  const [selectedDate, setSelectedDate] = useState<Date>();
 
-  const [selectedTime, setSelectedTime] = useState<string | undefined>(
-    undefined,
-  );
+  const [selectedTime, setSelectedTime] = useState<string>();
 
-  const [daysBookings, setDayBookings] = useState<Booking[]>([]);
+  const [bookings, setBookings] = useState<BookingData[]>([]);
 
-  const [fixedSchedules, setFixedSchedules] = useState<FixedSchedule[]>([]);
+  const [fixedSchedules, setFixedSchedules] = useState<FixedScheduleData[]>([]);
 
-  const [isCreatingBooking, setIsCreatingBooking] = useState(false);
+  const [loadingAvailability, setLoadingAvailability] = useState(false);
 
-  /*
-   * Sempre que o usuário escolher uma data,
-   * buscamos os agendamentos daquele dia
-   * e os horários fixos da barbearia.
-   */
-  useEffect(() => {
-    const fetchAvailability = async () => {
-      if (!selectedDay) {
-        return;
-      }
+  const [creatingBooking, setCreatingBooking] = useState(false);
 
-      try {
-        const bookings = await getBookings({
-          date: selectedDay,
-        });
+  // ---------------------------------------------------
+  // DATA MÍNIMA
+  //
+  // Não permitimos selecionar dias anteriores a hoje.
+  // ---------------------------------------------------
 
-        const fixed = await getFixedSchedules({
+  const today = useMemo(() => {
+    const date = new Date();
+
+    date.setHours(0, 0, 0, 0);
+
+    return date;
+  }, []);
+
+  // ---------------------------------------------------
+  // DATA MÁXIMA
+  //
+  // Permite agendamento para até 60 dias.
+  // ---------------------------------------------------
+
+  const maxDate = useMemo(() => {
+    const date = new Date(today);
+
+    date.setDate(date.getDate() + 60);
+
+    return date;
+  }, [today]);
+
+  // ===================================================
+  // CALCULAR DESCONTO
+  //
+  // A regra fica centralizada em:
+  //
+  // utils/booking-discount.ts
+  //
+  // Assim o frontend não precisa duplicar a regra.
+  // ===================================================
+
+  const discountResult = useMemo(() => {
+    return calculateBookingDiscount(
+      services.map((service) => ({
+        name: service.name,
+        price: Number(service.price),
+      })),
+    );
+  }, [services]);
+
+  // ===================================================
+  // SELECIONAR DATA
+  //
+  // IMPORTANTE:
+  //
+  // A busca dos horários acontece aqui, dentro do
+  // evento do usuário.
+  //
+  // Isso evita o erro do React:
+  //
+  // "Calling setState synchronously within an effect"
+  //
+  // Também evita a necessidade de useEffect para
+  // carregar disponibilidade.
+  // ===================================================
+
+  const handleSelectDate = async (date: Date | undefined) => {
+    setSelectedDate(date);
+
+    setSelectedTime(undefined);
+
+    // Limpamos a disponibilidade anterior imediatamente.
+    setBookings([]);
+
+    setFixedSchedules([]);
+
+    if (!date) {
+      return;
+    }
+
+    try {
+      setLoadingAvailability(true);
+
+      // ------------------------------------------------
+      // getDay():
+      //
+      // 0 = Domingo
+      // 1 = Segunda
+      // 2 = Terça
+      // 3 = Quarta
+      // 4 = Quinta
+      // 5 = Sexta
+      // 6 = Sábado
+      // ------------------------------------------------
+
+      const dayOfWeek = date.getDay();
+
+      // ------------------------------------------------
+      // BUSCAR AGENDAMENTOS E HORÁRIOS FIXOS
+      //
+      // getBookings recebe Date.
+      //
+      // getFixedSchedules recebe:
+      // {
+      //   barbershopId,
+      //   dayOfWeek
+      // }
+      // ------------------------------------------------
+
+      const [bookingsResult, fixedSchedulesResult] = await Promise.all([
+        getBookings({
+          date,
+        }),
+
+        getFixedSchedules({
           barbershopId,
-          dayOfWeek: selectedDay.getDay(),
-        });
+          dayOfWeek,
+        }),
+      ]);
 
-        setDayBookings(bookings);
-        setFixedSchedules(fixed);
-      } catch (error) {
-        console.error("Erro ao buscar disponibilidade:", error);
+      setBookings(bookingsResult ?? []);
 
-        toast.error("Erro ao carregar horários.");
-      }
-    };
+      setFixedSchedules(fixedSchedulesResult ?? []);
+    } catch (error) {
+      console.error("Erro ao carregar disponibilidade:", error);
 
-    fetchAvailability();
-  }, [selectedDay, barbershopId]);
-
-  const availableTimes = getTimeList(daysBookings, fixedSchedules);
-
-  const formattedTotal = Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(total);
-
-  const handleOpenChange = (open: boolean) => {
-    setCartOpen(open);
-
-    if (!open) {
-      setSelectedDay(undefined);
-      setSelectedTime(undefined);
-      setDayBookings([]);
-      setFixedSchedules([]);
+      toast.error("Não foi possível carregar os horários.");
+    } finally {
+      setLoadingAvailability(false);
     }
   };
 
-  const handleDateSelect = (date: Date | undefined) => {
-    setSelectedDay(date);
-    setSelectedTime(undefined);
+  // ===================================================
+  // VERIFICAR SE HORÁRIO ESTÁ INDISPONÍVEL
+  // ===================================================
+
+  const isTimeUnavailable = (time: string) => {
+    if (!selectedDate) {
+      return false;
+    }
+
+    // -------------------------------------------------
+    // 1. HORÁRIO FIXO
+    //
+    // getFixedSchedules já recebeu o dayOfWeek.
+    //
+    // Portanto aqui precisamos apenas verificar
+    // se o horário existe.
+    // -------------------------------------------------
+
+    const fixedScheduleExists = fixedSchedules.some(
+      (schedule) => schedule.time === time,
+    );
+
+    if (fixedScheduleExists) {
+      return true;
+    }
+
+    // -------------------------------------------------
+    // 2. AGENDAMENTO NORMAL
+    //
+    // Comparamos a data e o horário.
+    // -------------------------------------------------
+
+    const selectedDateString = format(selectedDate, "yyyy-MM-dd");
+
+    const bookingExists = bookings.some((booking) => {
+      const bookingDateString = format(new Date(booking.date), "yyyy-MM-dd");
+
+      const bookingTime = format(new Date(booking.date), "HH:mm");
+
+      return bookingDateString === selectedDateString && bookingTime === time;
+    });
+
+    return bookingExists;
   };
+
+  // ===================================================
+  // CRIAR AGENDAMENTO
+  // ===================================================
 
   const handleCreateBooking = async () => {
     if (services.length === 0) {
-      toast.error("Adicione pelo menos um serviço.");
+      toast.error("Selecione pelo menos um serviço.");
+
       return;
     }
 
-    if (!selectedDay || !selectedTime) {
-      toast.error("Selecione a data e o horário.");
+    if (!selectedDate) {
+      toast.error("Selecione uma data para o agendamento.");
+
       return;
     }
 
-    setIsCreatingBooking(true);
+    if (!selectedTime) {
+      toast.error("Selecione um horário.");
+
+      return;
+    }
+
+    if (isTimeUnavailable(selectedTime)) {
+      toast.error("Este horário não está mais disponível.");
+
+      return;
+    }
 
     try {
-      /*
-       * Monta a data no formato:
-       *
-       * YYYY-MM-DD
-       *
-       * Exemplo:
-       * 2026-09-18
-       */
-      const year = selectedDay.getFullYear();
+      setCreatingBooking(true);
 
-      const month = String(selectedDay.getMonth() + 1).padStart(2, "0");
+      // ------------------------------------------------
+      // IMPORTANTE:
+      //
+      // Não enviamos desconto para o servidor.
+      //
+      // O createBooking calcula novamente o desconto
+      // usando calculateBookingDiscount().
+      // ------------------------------------------------
 
-      const day = String(selectedDay.getDate()).padStart(2, "0");
+      const date = format(selectedDate, "yyyy-MM-dd");
 
-      const selectedDate = `${year}-${month}-${day}`;
+      const result = await createBooking({
+        serviceIds: services.map((service) => service.id),
 
-      /*
-       * Aqui está a principal mudança:
-       *
-       * TODOS os serviços do carrinho
-       * são enviados para o backend.
-       */
-      const serviceIds = services.map((service) => service.id);
+        date,
 
-      console.log("=================================");
-      console.log("CRIANDO AGENDAMENTO PELO CARRINHO");
-      console.log("SERVIÇOS:", serviceIds);
-      console.log("DATA:", selectedDate);
-      console.log("HORÁRIO:", selectedTime);
-      console.log("=================================");
-
-      await createBooking({
-        serviceIds,
-        date: selectedDate,
         time: selectedTime,
       });
 
-      toast.success("Agendamento criado com sucesso!");
+      // ------------------------------------------------
+      // SUCESSO
+      // ------------------------------------------------
 
-      /*
-       * Limpa o carrinho depois de salvar
-       * o agendamento.
-       */
+      toast.success("Agendamento realizado com sucesso!");
+
+      // Exibe o valor final calculado pelo servidor.
+      if (result.discount > 0 && result.discountDescription) {
+        toast.success(
+          `${result.discountDescription}: desconto de R$ ${result.discount.toFixed(2)}`,
+        );
+      }
+
+      // ------------------------------------------------
+      // LIMPAR CARRINHO
+      // ------------------------------------------------
+
       clearCart();
 
-      setCartOpen(false);
+      setSelectedDate(undefined);
 
-      setSelectedDay(undefined);
       setSelectedTime(undefined);
-      setDayBookings([]);
-      setFixedSchedules([]);
-    } catch (error) {
-      console.error("ERRO AO CRIAR AGENDAMENTO:", error);
 
-      toast.error(
-        error instanceof Error ? error.message : "Erro ao criar agendamento.",
-      );
+      setBookings([]);
+
+      setFixedSchedules([]);
+
+      setOpen(false);
+    } catch (error) {
+      console.error("Erro ao criar agendamento:", error);
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Não foi possível realizar o agendamento.";
+
+      toast.error(message);
     } finally {
-      setIsCreatingBooking(false);
+      setCreatingBooking(false);
     }
   };
 
-  /*
-   * Não mostra o botão se o carrinho estiver vazio.
-   */
+  // ===================================================
+  // CARRINHO VAZIO
+  // ===================================================
+
   if (services.length === 0) {
     return null;
   }
 
+  // ===================================================
+  // RENDER
+  // ===================================================
+
   return (
-    <>
-      {/* =====================================================
-          BOTÃO FLUTUANTE DO CARRINHO
-      ===================================================== */}
+    <Sheet open={open} onOpenChange={setOpen}>
+      {/* =================================================
+BOTÃO DO CARRINHO
+================================================= */}
 
-      <div className="fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
-        <Sheet open={cartOpen} onOpenChange={handleOpenChange}>
-          <SheetTrigger
-            render={
-              <Button
-                type="button"
-                size="lg"
-                className="w-full max-w-md rounded-full shadow-xl"
-              />
-            }
-          >
-            <ShoppingCartIcon size={20} className="mr-2" />
-            Ver carrinho ({services.length})
-            <span className="ml-auto">{formattedTotal}</span>
-          </SheetTrigger>
+      <SheetTrigger
+        className="
+    fixed
+    bottom-5
+    right-5
+    z-50
+    flex
+    h-14
+    items-center
+    justify-center
+    rounded-full
+    bg-primary
+    px-5
+    text-primary-foreground
+    shadow-lg
+    transition-colors
+    hover:bg-primary/90
+  "
+      >
+        <ShoppingCart className="mr-2 h-5 w-5" />
 
-          {/* =================================================
-              CARRINHO
-          ================================================= */}
+        <span className="hidden sm:inline">Agendar</span>
 
-          <SheetContent className="flex h-full flex-col px-0">
-            <SheetHeader className="border-b px-5 py-4">
-              <SheetTitle>Seus serviços</SheetTitle>
-            </SheetHeader>
+        <span className="ml-2 rounded-full bg-white/20 px-2 py-0.5 text-sm">
+          {services.length}
+        </span>
+      </SheetTrigger>
 
-            <div className="flex-1 overflow-y-auto">
-              {/* =============================================
-                  SERVIÇOS
-              ============================================= */}
+      {/* =================================================
+      CONTEÚDO DO CARRINHO
+      ================================================= */}
+      <SheetContent
+        side="bottom"
+        className="mx-auto max-h-[95vh] w-full overflow-y-auto rounded-t-3xl sm:max-w-2xl"
+      >
+        <SheetHeader className="text-left">
+          <SheetTitle>Agendar em {barbershopName}</SheetTitle>
+        </SheetHeader>
 
-              <div className="space-y-3 border-b p-5">
-                {services.map((service) => {
-                  const formattedPrice = Intl.NumberFormat("pt-BR", {
-                    style: "currency",
-                    currency: "BRL",
-                  }).format(Number(service.price));
+        <div className="space-y-6 pb-8 pt-6">
+          {/* =============================================
+          SERVIÇOS SELECIONADOS
+          ============================================= */}
 
-                  return (
-                    <Card key={service.id}>
-                      <CardContent className="flex items-center justify-between gap-3 p-4">
-                        <div className="min-w-0">
-                          <p className="font-semibold">{service.name}</p>
+          <Card>
+            <CardContent className="p-4">
+              <div className="mb-4 flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5" />
 
-                          <p className="text-sm text-muted-foreground">
-                            {formattedPrice}
-                          </p>
-                        </div>
+                <h3 className="font-semibold">Serviços selecionados</h3>
+              </div>
 
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeService(service.id)}
-                        >
-                          <Trash2Icon size={18} />
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+              <div className="space-y-3">
+                {services.map((service) => (
+                  <div
+                    key={service.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{service.name}</p>
 
-                <div className="flex items-center justify-between pt-2">
+                      <p className="text-sm text-muted-foreground">
+                        R$ {Number(service.price).toFixed(2)}
+                      </p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeService(service.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              {/* =========================================
+              RESUMO FINANCEIRO
+              ========================================= */}
+
+              <div className="mt-5 space-y-2 border-t pt-4">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotal</span>
+
+                  <span>R$ {discountResult.subtotal.toFixed(2)}</span>
+                </div>
+
+                {discountResult.discount > 0 && (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>{discountResult.description}</span>
+
+                    <span>- R$ {discountResult.discount.toFixed(2)}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between border-t pt-2">
                   <span className="font-semibold">Total</span>
 
-                  <span className="text-lg font-bold text-primary">
-                    {formattedTotal}
+                  <span className="text-xl font-bold">
+                    R$ {discountResult.total.toFixed(2)}
                   </span>
                 </div>
               </div>
+            </CardContent>
+          </Card>
 
-              {/* =============================================
-                  CALENDÁRIO
-              ============================================= */}
+          {/* =============================================
+          SELEÇÃO DE DATA
+          ============================================= */}
 
-              <div className="flex justify-center border-b px-2 py-5">
+          <Card>
+            <CardContent className="p-4">
+              <div className="mb-4 flex items-center gap-2">
+                <CalendarDays className="h-5 w-5" />
+
+                <h3 className="font-semibold">Escolha a data</h3>
+              </div>
+
+              <div className="flex justify-center">
                 <Calendar
                   mode="single"
-                  locale={ptBR}
-                  selected={selectedDay}
-                  onSelect={handleDateSelect}
+                  selected={selectedDate}
+                  onSelect={handleSelectDate}
                   disabled={{
-                    before: new Date(),
+                    before: today,
+                    after: maxDate,
                   }}
+                  locale={ptBR}
+                  className="rounded-md border"
                 />
               </div>
 
-              {/* =============================================
-                  HORÁRIOS
-              ============================================= */}
+              {selectedDate && (
+                <p className="mt-4 text-center text-sm text-muted-foreground">
+                  Data selecionada:{" "}
+                  <span className="font-medium text-foreground">
+                    {format(selectedDate, "dd/MM/yyyy")}
+                  </span>
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
-              {selectedDay && (
-                <div className="border-b p-5">
-                  <h3 className="mb-3 text-sm font-semibold">
-                    Horários disponíveis
-                  </h3>
+          {/* =============================================
+          HORÁRIOS
+          ============================================= */}
 
-                  {availableTimes.length > 0 ? (
-                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none [&::-webkit-scrollbar]:hidden">
-                      {availableTimes.map((time) => (
+          {selectedDate && (
+            <Card>
+              <CardContent className="p-4">
+                <div className="mb-4 flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+
+                  <h3 className="font-semibold">Escolha o horário</h3>
+                </div>
+
+                {loadingAvailability ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                    {TIME_LIST.map((time) => {
+                      const unavailable = isTimeUnavailable(time);
+
+                      const selected = selectedTime === time;
+
+                      return (
                         <Button
                           key={time}
                           type="button"
-                          variant={
-                            selectedTime === time ? "default" : "outline"
-                          }
-                          className="shrink-0 rounded-full"
+                          variant={selected ? "default" : "outline"}
+                          disabled={unavailable}
                           onClick={() => setSelectedTime(time)}
+                          className="h-11"
                         >
+                          {selected && <Check className="mr-1 h-4 w-4" />}
+
                           {time}
                         </Button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Não há horários disponíveis para este dia.
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* =======================================
+                AVISO SOBRE HORÁRIO FIXO
+                ======================================= */}
+
+                {!loadingAvailability && fixedSchedules.length > 0 && (
+                  <div className="mt-4 rounded-lg border bg-muted/50 p-3">
+                    <p className="text-xs text-muted-foreground">
+                      Alguns horários estão indisponíveis porque já possuem
+                      horários fixos.
                     </p>
-                  )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* =============================================
+          RESUMO FINAL
+          ============================================= */}
+
+          {selectedDate && selectedTime && (
+            <Card>
+              <CardContent className="p-4">
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Barbearia</p>
+
+                    <p className="font-medium">{barbershopName}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Data</p>
+
+                      <p className="font-medium">
+                        {format(selectedDate, "dd/MM/yyyy")}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-sm text-muted-foreground">Horário</p>
+
+                      <p className="font-medium">{selectedTime}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-muted-foreground">Serviços</p>
+
+                    <p className="font-medium">
+                      {services.map((service) => service.name).join(", ")}
+                    </p>
+                  </div>
+
+                  <div className="border-t pt-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">Total</span>
+
+                      <span className="text-xl font-bold">
+                        R$ {discountResult.total.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              )}
+              </CardContent>
+            </Card>
+          )}
 
-              {/* =============================================
-                  RESUMO
-              ============================================= */}
+          {/* =============================================
+          BOTÃO CONFIRMAR
+          ============================================= */}
 
-              {selectedDay && selectedTime && (
-                <div className="p-5">
-                  <Card>
-                    <CardContent className="space-y-4 p-4">
-                      <div>
-                        <p className="text-xs text-muted-foreground">
-                          Serviços
-                        </p>
+          <Button
+            type="button"
+            className="h-12 w-full"
+            disabled={
+              creatingBooking ||
+              !selectedDate ||
+              !selectedTime ||
+              services.length === 0
+            }
+            onClick={handleCreateBooking}
+          >
+            {creatingBooking ? (
+              <>
+                <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                Agendando...
+              </>
+            ) : (
+              <>
+                <Check className="mr-2 h-5 w-5" />
+                Confirmar agendamento
+              </>
+            )}
+          </Button>
 
-                        <div className="mt-2 space-y-1">
-                          {services.map((service) => (
-                            <div
-                              key={service.id}
-                              className="flex justify-between gap-3"
-                            >
-                              <span className="text-sm">{service.name}</span>
+          {/* =============================================
+          LIMPAR CARRINHO
+          ============================================= */}
 
-                              <span className="text-sm font-medium">
-                                {Intl.NumberFormat("pt-BR", {
-                                  style: "currency",
-                                  currency: "BRL",
-                                }).format(Number(service.price))}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between border-t pt-3">
-                        <p className="text-sm text-gray-400">Data</p>
-
-                        <p className="text-sm font-medium capitalize">
-                          {formatDate(selectedDay, "d 'de' MMMM", {
-                            locale: ptBR,
-                          })}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-gray-400">Horário</p>
-
-                        <p className="text-sm font-medium">{selectedTime}</p>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-gray-400">Barbearia</p>
-
-                        <p className="max-w-[60%] truncate text-right text-sm font-medium">
-                          {barbershopName}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between border-t pt-3">
-                        <p className="font-semibold">Total</p>
-
-                        <p className="font-bold text-primary">
-                          {formattedTotal}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
-            </div>
-
-            {/* =================================================
-                RODAPÉ
-            ================================================= */}
-
-            <SheetFooter className="border-t bg-background px-5 py-4">
-              <Button
-                className="w-full"
-                onClick={handleCreateBooking}
-                disabled={
-                  services.length === 0 ||
-                  !selectedDay ||
-                  !selectedTime ||
-                  availableTimes.length === 0 ||
-                  isCreatingBooking
-                }
-              >
-                {isCreatingBooking ? "Agendando..." : "Confirmar agendamento"}
-              </Button>
-            </SheetFooter>
-          </SheetContent>
-        </Sheet>
-      </div>
-
-      {/* =====================================================
-          LOGIN
-      ===================================================== */}
-
-      <Dialog open={signInDialogIsOpen} onOpenChange={setSignInDialogIsOpen}>
-        <DialogContent className="w-[90%] max-w-md">
-          <SignInDialog />
-        </DialogContent>
-      </Dialog>
-    </>
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full"
+            disabled={creatingBooking}
+            onClick={clearCart}
+          >
+            <Minus className="mr-2 h-4 w-4" />
+            Limpar serviços
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }

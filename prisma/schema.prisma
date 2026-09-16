@@ -99,10 +99,16 @@ model Booking {
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   status                BookingStatus          @default(PENDING)
+
   clientName            String?
   clientPhone           String?
+
   reminderSent          Boolean                @default(false)
   reminderSentAt        DateTime?
+
+  subtotal              Decimal                @default(0) @db.Decimal(10, 2)
+  discount              Decimal                @default(0) @db.Decimal(10, 2)
+  total                 Decimal                @default(0) @db.Decimal(10, 2)
 
   service               BarbershopService      @relation(fields: [serviceId], references: [id])
   bookingItems          BookingService[]
@@ -114,6 +120,7 @@ model Booking {
   @@index([date])
   @@index([reminderSent, date])
 }
+
 model BookingService {
   id        String   @id @default(uuid())
   bookingId String

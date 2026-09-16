@@ -2,6 +2,7 @@
 
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/prisma";
+import { calculateBookingDiscount } from "@/app/utils/booking-discount";
 import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 
@@ -19,7 +20,7 @@ export const createBooking = async ({
   userId,
 }: CreateBookingParams) => {
   // =====================================================
-  // 1. AUTENTICAÇÃO
+  // 1. VERIFICAR AUTENTICAÇÃO
   // =====================================================
 
   const session = await getServerSession(authOptions);
@@ -36,12 +37,19 @@ export const createBooking = async ({
     throw new Error("Selecione pelo menos um serviço.");
   }
 
-  // Remove possíveis IDs duplicados
+  // Remove serviços duplicados
   const uniqueServiceIds = [...new Set(serviceIds)];
 
   // =====================================================
-  // 3. DEFINIR O CLIENTE
+  // 3. DEFINIR O USUÁRIO DO AGENDAMENTO
   // =====================================================
+
+  // Cliente:
+  // - sempre cria o próprio agendamento.
+  //
+  // Barbeiro:
+  // - pode criar agendamento para outro usuário através
+  //   do parâmetro userId.
 
   const bookingUserId =
     session.user.role === "BARBER" && userId ? userId : session.user.id;
@@ -69,7 +77,7 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 6. BUSCAR OS SERVIÇOS
+  // 6. BUSCAR OS SERVIÇOS NO BANCO
   // =====================================================
 
   const services = await db.barbershopService.findMany({
@@ -80,22 +88,19 @@ export const createBooking = async ({
     },
   });
 
-  console.log("SERVICES:", services);
-
+  // Verifica se todos os serviços realmente existem
   if (services.length !== uniqueServiceIds.length) {
     throw new Error("Um ou mais serviços não foram encontrados.");
   }
 
   // =====================================================
-  // 7. GARANTIR QUE TODOS OS SERVIÇOS SÃO DA MESMA
-  //    BARBEARIA
+  // 7. GARANTIR QUE OS SERVIÇOS SÃO DA MESMA BARBEARIA
   // =====================================================
 
   const barbershopId = services[0].barbershopId;
 
   const allFromSameBarbershop = services.every(
-    (service: { barbershopId: string }) =>
-      service.barbershopId === barbershopId,
+    (service) => service.barbershopId === barbershopId,
   );
 
   if (!allFromSameBarbershop) {
@@ -105,27 +110,56 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 8. DIA DA SEMANA
+  // 8. CALCULAR DESCONTO NO SERVIDOR
+  // =====================================================
+
+  // O desconto é calculado novamente no servidor.
   //
-  // Usamos explicitamente o horário de Brasília.
+  // Não confiamos nos valores enviados pelo navegador.
+  //
+  // Exemplos:
+  //
+  // Corte + Barba
+  // R$35 + R$35 = R$70
+  // Desconto = R$10
+  // Total = R$60
+  //
+  // Barba + Pézinho
+  // R$35 + R$10 = R$45
+  // Desconto = R$5
+  // Total = R$40
+
+  const discountResult = calculateBookingDiscount(
+    services.map((service) => ({
+      name: service.name,
+      price: Number(service.price),
+    })),
+  );
+
+  // =====================================================
+  // 9. DATA DO AGENDAMENTO
   // =====================================================
 
   const [year, month, day] = date.split("-").map(Number);
+
+  /*
+   * Cria uma data considerando o horário do Brasil.
+   *
+   * Exemplo:
+   *
+   * 2026-09-19 + 10:00
+   *
+   * será tratado como:
+   *
+   * 19/09/2026 às 10:00 no horário de São Paulo.
+   */
 
   const brazilDate = new Date(Date.UTC(year, month - 1, day, 3, 0, 0));
 
   const dayOfWeek = brazilDate.getUTCDay();
 
-  console.log("=================================");
-  console.log("NOVO AGENDAMENTO");
-  console.log("DATA:", date);
-  console.log("HORÁRIO:", time);
-  console.log("DIA DA SEMANA:", dayOfWeek);
-  console.log("SERVIÇOS:", uniqueServiceIds);
-  console.log("=================================");
-
   // =====================================================
-  // 9. VERIFICAR HORÁRIO FIXO
+  // 10. VERIFICAR HORÁRIO FIXO
   // =====================================================
 
   const fixedSchedule = await db.fixedSchedule.findFirst({
@@ -144,13 +178,7 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 10. CRIAR DATA NO HORÁRIO DE BRASÍLIA
-  //
-  // Exemplo:
-  // 2026-09-18 15:00 Brasil
-  //
-  // será armazenado como:
-  // 2026-09-18T18:00:00.000Z
+  // 11. CRIAR DATA COMPLETA DO AGENDAMENTO
   // =====================================================
 
   const bookingDate = new Date(`${date}T${time}:00-03:00`);
@@ -160,7 +188,7 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 11. VERIFICAR SE O HORÁRIO JÁ ESTÁ OCUPADO
+  // 12. VERIFICAR SE O HORÁRIO JÁ ESTÁ OCUPADO
   // =====================================================
 
   const slotStart = new Date(bookingDate);
@@ -177,7 +205,6 @@ export const createBooking = async ({
         gte: slotStart,
         lt: slotEnd,
       },
-
       status: {
         not: "CANCELLED",
       },
@@ -189,35 +216,52 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 12. CRIAR O AGENDAMENTO
-  // =====================================================
-  //
-  // O Booking possui um serviceId legado para compatibilidade,
-  // mas os serviços realmente selecionados ficam em bookingItems.
+  // 13. CRIAR O AGENDAMENTO
   // =====================================================
 
   const booking = await db.booking.create({
     data: {
       userId: bookingUserId,
 
-      // Mantemos o primeiro serviço no campo legado.
+      // O primeiro serviço continua sendo usado pelo
+      // campo serviceId legado.
       serviceId: uniqueServiceIds[0],
 
       date: bookingDate,
 
       status: "PENDING",
 
-      // Salva TODOS os serviços selecionados no agendamento.
+      // =================================================
+      // VALORES FINANCEIROS DO AGENDAMENTO
+      // =================================================
+      //
+      // IMPORTANTE:
+      //
+      // Agora os valores calculados pelo servidor são
+      // realmente gravados no banco.
+      //
+      // Isso permite que o Dashboard continue mostrando
+      // o desconto mesmo depois de atualizar a página.
+
+      subtotal: discountResult.subtotal,
+      discount: discountResult.discount,
+      total: discountResult.total,
+
+      // =================================================
+      // SERVIÇOS DO AGENDAMENTO
+      // =================================================
+
       bookingItems: {
         create: services.map((service) => ({
           serviceId: service.id,
+
+          // Guarda o preço daquele serviço no momento
+          // em que o agendamento foi criado.
           price: service.price,
         })),
       },
     },
 
-    // IMPORTANTE:
-    // include fica FORA do data.
     include: {
       bookingItems: {
         include: {
@@ -227,25 +271,26 @@ export const createBooking = async ({
     },
   });
 
-  console.log("=================================");
-  console.log("AGENDAMENTO CRIADO");
-  console.log("ID:", booking.id);
-  console.log("CLIENTE:", bookingUserId);
-  console.log("SERVIÇOS:", uniqueServiceIds);
-  console.log("DATA:", booking.date);
-  console.log("STATUS:", booking.status);
-  console.log("=================================");
-
   // =====================================================
-  // 13. ATUALIZAR CACHE
+  // 14. ATUALIZAR AS PÁGINAS
   // =====================================================
 
   revalidatePath("/");
   revalidatePath("/bookings");
   revalidatePath("/barbeiro/dashboard");
 
+  // =====================================================
+  // 15. RETORNAR RESULTADO
+  // =====================================================
+
   return {
     success: true,
     bookingId: booking.id,
+
+    // Valores calculados pelo servidor.
+    subtotal: discountResult.subtotal,
+    discount: discountResult.discount,
+    total: discountResult.total,
+    discountDescription: discountResult.description,
   };
 };

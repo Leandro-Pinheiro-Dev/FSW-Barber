@@ -47,10 +47,7 @@ const ServiceItem = ({ service }: ServiceItemProps) => {
     addService({
       id: service.id,
       name: service.name,
-      description: service.description,
-      imageUrl: service.imageUrl,
       price: Number(service.price),
-      barbershopId: service.barbershopId,
     });
 
     toast.success(`${service.name} adicionado ao carrinho.`);

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 import { toast } from "sonner";
 
 import { createBookingByBarber } from "@/app/_actions/create-booking-by-barber";
+import { calculateBookingDiscount } from "@/app/utils/booking-discount";
 
 interface User {
   id: string;
@@ -15,6 +16,7 @@ interface User {
 interface Service {
   id: string;
   name: string;
+  price: number;
 }
 
 interface CreateBookingButtonProps {
@@ -42,7 +44,11 @@ const CreateBookingButton = ({
 
   const [clientPhone, setClientPhone] = useState("");
 
-  const [serviceId, setServiceId] = useState("");
+  // =====================================================
+  // AGORA É UMA LISTA DE SERVIÇOS
+  // =====================================================
+
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
 
   const [date, setDate] = useState("");
 
@@ -68,7 +74,9 @@ const CreateBookingButton = ({
 
   const handleOpen = () => {
     setUserId(users[0]?.id ?? "");
-    setServiceId(services[0]?.id ?? "");
+
+    // Seleciona o primeiro serviço inicialmente
+    setSelectedServiceIds(services[0]?.id ? [services[0].id] : []);
 
     if (initialDate) {
       setDate(formatDateForInput(initialDate));
@@ -98,12 +106,48 @@ const CreateBookingButton = ({
   };
 
   // =====================================================
+  // SERVIÇOS SELECIONADOS
+  // =====================================================
+
+  const selectedServices = useMemo(() => {
+    return services.filter((service) =>
+      selectedServiceIds.includes(service.id),
+    );
+  }, [services, selectedServiceIds]);
+
+  // =====================================================
+  // CALCULAR DESCONTO
+  // =====================================================
+
+  const discountResult = useMemo(() => {
+    return calculateBookingDiscount(selectedServices);
+  }, [selectedServices]);
+
+  // =====================================================
+  // SELECIONAR / DESMARCAR SERVIÇO
+  // =====================================================
+
+  const handleToggleService = (serviceId: string) => {
+    setSelectedServiceIds((current) => {
+      if (current.includes(serviceId)) {
+        return current.filter((id) => id !== serviceId);
+      }
+
+      return [...current, serviceId];
+    });
+  };
+
+  // =====================================================
   // CRIAR AGENDAMENTO
   // =====================================================
 
   const handleCreate = () => {
-    if (!serviceId || !date || !time) {
-      toast.error("Preencha todos os campos obrigatórios.");
+    // ===================================================
+    // SERVIÇOS
+    // ===================================================
+
+    if (selectedServiceIds.length === 0 || !date || !time) {
+      toast.error("Selecione pelo menos um serviço, a data e o horário.");
 
       return;
     }
@@ -129,7 +173,7 @@ const CreateBookingButton = ({
     }
 
     // ===================================================
-    // DATA
+    // DATA + HORÁRIO
     // ===================================================
 
     const selectedDate = new Date(`${date}T${time}:00`);
@@ -140,10 +184,14 @@ const CreateBookingButton = ({
       return;
     }
 
+    // ===================================================
+    // ENVIAR PARA O SERVIDOR
+    // ===================================================
+
     startTransition(async () => {
       try {
-        await createBookingByBarber({
-          serviceId,
+        const result = await createBookingByBarber({
+          serviceIds: selectedServiceIds,
 
           date: selectedDate,
 
@@ -157,7 +205,17 @@ const CreateBookingButton = ({
               : undefined,
         });
 
-        toast.success("Agendamento criado com sucesso.");
+        // =================================================
+        // MENSAGEM DE SUCESSO
+        // =================================================
+
+        if (result.discount > 0) {
+          toast.success(
+            `Agendamento criado! Desconto de R$ ${result.discount.toFixed(2)} aplicado.`,
+          );
+        } else {
+          toast.success("Agendamento criado com sucesso.");
+        }
 
         setOpen(false);
 
@@ -196,12 +254,12 @@ const CreateBookingButton = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 p-4 backdrop-blur-sm">
-      <div className="mx-auto my-8 w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 text-white shadow-2xl">
-        {/* =====================================================
+      <div className="mx-auto my-8 w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 text-white shadow-2xl">
+        {/* =================================================
             CABEÇALHO
-        ===================================================== */}
+        ================================================= */}
 
-        <div className="mb-6">
+        <div className="border-b border-zinc-800 p-6">
           <h2 className="text-xl font-bold text-white">Novo agendamento</h2>
 
           <p className="mt-1 text-sm text-zinc-400">
@@ -209,10 +267,10 @@ const CreateBookingButton = ({
           </p>
         </div>
 
-        <div className="space-y-5">
-          {/* =====================================================
+        <div className="space-y-5 p-6">
+          {/* =================================================
               TIPO DE CLIENTE
-          ===================================================== */}
+          ================================================= */}
 
           <div>
             <label className="mb-3 block text-sm font-medium text-zinc-300">
@@ -226,7 +284,9 @@ const CreateBookingButton = ({
                 type="button"
                 onClick={() => {
                   setClientType("registered");
+
                   setClientName("");
+
                   setClientPhone("");
                 }}
                 className={`rounded-lg border p-3 text-sm font-medium transition ${
@@ -244,6 +304,7 @@ const CreateBookingButton = ({
                 type="button"
                 onClick={() => {
                   setClientType("manual");
+
                   setUserId("");
                 }}
                 className={`rounded-lg border p-3 text-sm font-medium transition ${
@@ -257,9 +318,9 @@ const CreateBookingButton = ({
             </div>
           </div>
 
-          {/* =====================================================
+          {/* =================================================
               CLIENTE CADASTRADO
-          ===================================================== */}
+          ================================================= */}
 
           {clientType === "registered" && (
             <div>
@@ -289,9 +350,9 @@ const CreateBookingButton = ({
             </div>
           )}
 
-          {/* =====================================================
+          {/* =================================================
               CLIENTE MANUAL
-          ===================================================== */}
+          ================================================= */}
 
           {clientType === "manual" && (
             <div className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
@@ -326,39 +387,92 @@ const CreateBookingButton = ({
             </div>
           )}
 
-          {/* =====================================================
-              SERVIÇO
-          ===================================================== */}
+          {/* =================================================
+              SERVIÇOS
+          ================================================= */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-zinc-300">
-              Serviço
+            <label className="mb-3 block text-sm font-medium text-zinc-300">
+              Serviços
             </label>
 
-            <select
-              value={serviceId}
-              onChange={(event) => setServiceId(event.target.value)}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 p-3 text-white outline-none transition focus:border-white"
-            >
-              <option value="" className="bg-zinc-950">
-                Selecione um serviço
-              </option>
+            <div className="space-y-2">
+              {services.map((service) => {
+                const selected = selectedServiceIds.includes(service.id);
 
-              {services.map((service) => (
-                <option
-                  key={service.id}
-                  value={service.id}
-                  className="bg-zinc-950 text-white"
-                >
-                  {service.name}
-                </option>
-              ))}
-            </select>
+                return (
+                  <button
+                    key={service.id}
+                    type="button"
+                    onClick={() => handleToggleService(service.id)}
+                    className={`flex w-full items-center justify-between rounded-xl border p-3 text-left transition ${
+                      selected
+                        ? "border-white bg-white text-black"
+                        : "border-zinc-700 bg-zinc-950 text-white hover:border-zinc-500"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`flex h-5 w-5 items-center justify-center rounded border text-xs ${
+                          selected
+                            ? "border-black bg-black text-white"
+                            : "border-zinc-600"
+                        }`}
+                      >
+                        {selected ? "✓" : ""}
+                      </span>
+
+                      <span className="font-medium">{service.name}</span>
+                    </div>
+
+                    <span
+                      className={`font-semibold ${
+                        selected ? "text-black" : "text-green-400"
+                      }`}
+                    >
+                      R$ {service.price.toFixed(2)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {/* =====================================================
+          {/* =================================================
+              RESUMO DOS SERVIÇOS
+          ================================================= */}
+
+          {selectedServices.length > 0 && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm text-zinc-400">
+                  <span>Subtotal</span>
+
+                  <span>R$ {discountResult.subtotal.toFixed(2)}</span>
+                </div>
+
+                {discountResult.discount > 0 && (
+                  <div className="flex justify-between text-sm text-green-400">
+                    <span>{discountResult.description ?? "Desconto"}</span>
+
+                    <span>- R$ {discountResult.discount.toFixed(2)}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between border-t border-zinc-800 pt-3">
+                  <span className="font-semibold text-white">Total</span>
+
+                  <span className="text-xl font-bold text-green-400">
+                    R$ {discountResult.total.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* =================================================
               DATA
-          ===================================================== */}
+          ================================================= */}
 
           <div>
             <label className="mb-2 block text-sm font-medium text-zinc-300">
@@ -373,9 +487,9 @@ const CreateBookingButton = ({
             />
           </div>
 
-          {/* =====================================================
+          {/* =================================================
               HORÁRIO
-          ===================================================== */}
+          ================================================= */}
 
           <div>
             <label className="mb-2 block text-sm font-medium text-zinc-300">
@@ -391,11 +505,11 @@ const CreateBookingButton = ({
           </div>
         </div>
 
-        {/* =====================================================
+        {/* =================================================
             BOTÕES
-        ===================================================== */}
+        ================================================= */}
 
-        <div className="border-t border-zinc-800 bg-zinc-900 p-6">
+        <div className="border-t border-zinc-800 p-6">
           <div className="flex justify-end gap-3">
             <button
               type="button"

@@ -2,27 +2,33 @@
 
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/prisma";
+import { calculateBookingDiscount } from "@/app/utils/booking-discount";
 import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 import { format } from "date-fns";
 
 interface CreateBookingByBarberParams {
-  serviceId: string;
+  // Agora aceitamos vários serviços
+  serviceIds: string[];
+
   date: Date;
+
   userId?: string;
+
   clientName?: string;
+
   clientPhone?: string;
 }
 
 export const createBookingByBarber = async ({
-  serviceId,
+  serviceIds,
   date,
   userId,
   clientName,
   clientPhone,
 }: CreateBookingByBarberParams) => {
   // =====================================================
-  // AUTENTICAÇÃO
+  // 1. AUTENTICAÇÃO
   // =====================================================
 
   const session = await getServerSession(authOptions);
@@ -32,7 +38,7 @@ export const createBookingByBarber = async ({
   }
 
   // =====================================================
-  // SOMENTE BARBEIRO PODE CRIAR AGENDAMENTO PELO PAINEL
+  // 2. SOMENTE BARBEIRO PODE CRIAR PELO PAINEL
   // =====================================================
 
   if (session.user.role !== "BARBER") {
@@ -40,24 +46,69 @@ export const createBookingByBarber = async ({
   }
 
   // =====================================================
-  // VALIDAR SERVIÇO
+  // 3. VALIDAR SERVIÇOS
   // =====================================================
 
-  const service = await db.barbershopService.findUnique({
+  if (!Array.isArray(serviceIds) || serviceIds.length === 0) {
+    throw new Error("Selecione pelo menos um serviço.");
+  }
+
+  // Remove serviços duplicados
+  const uniqueServiceIds = [...new Set(serviceIds)];
+
+  // =====================================================
+  // 4. BUSCAR TODOS OS SERVIÇOS
+  // =====================================================
+
+  const services = await db.barbershopService.findMany({
     where: {
-      id: serviceId,
+      id: {
+        in: uniqueServiceIds,
+      },
     },
   });
 
-  if (!service) {
-    throw new Error("Serviço não encontrado.");
+  // Verifica se todos os serviços existem
+  if (services.length !== uniqueServiceIds.length) {
+    throw new Error("Um ou mais serviços não foram encontrados.");
   }
 
   // =====================================================
-  // DEFINIR TIPO DE CLIENTE
+  // 5. GARANTIR QUE TODOS PERTENCEM À MESMA BARBEARIA
+  // =====================================================
+
+  const barbershopId = services[0].barbershopId;
+
+  const allFromSameBarbershop = services.every(
+    (service) => service.barbershopId === barbershopId,
+  );
+
+  if (!allFromSameBarbershop) {
+    throw new Error(
+      "Os serviços selecionados pertencem a barbearias diferentes.",
+    );
+  }
+
+  // =====================================================
+  // 6. CALCULAR DESCONTO
+  // =====================================================
+
+  // O cálculo é feito no servidor usando os preços
+  // armazenados no banco.
+
+  const discountResult = calculateBookingDiscount(
+    services.map((service) => ({
+      name: service.name,
+      price: Number(service.price),
+    })),
+  );
+
+  // =====================================================
+  // 7. DEFINIR TIPO DE CLIENTE
   // =====================================================
 
   const hasRegisteredClient = Boolean(userId);
+
   const hasManualClient = Boolean(clientName?.trim());
 
   if (!hasRegisteredClient && !hasManualClient) {
@@ -69,7 +120,7 @@ export const createBookingByBarber = async ({
   }
 
   // =====================================================
-  // CLIENTE CADASTRADO
+  // 8. CLIENTE CADASTRADO
   // =====================================================
 
   if (userId) {
@@ -85,7 +136,7 @@ export const createBookingByBarber = async ({
   }
 
   // =====================================================
-  // CLIENTE MANUAL
+  // 9. CLIENTE MANUAL
   // =====================================================
 
   const normalizedClientName = clientName?.trim() || null;
@@ -97,7 +148,15 @@ export const createBookingByBarber = async ({
   }
 
   // =====================================================
-  // DIA DA SEMANA E HORÁRIO
+  // 10. VALIDAR DATA
+  // =====================================================
+
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    throw new Error("Data ou horário inválido.");
+  }
+
+  // =====================================================
+  // 11. DIA DA SEMANA E HORÁRIO
   // =====================================================
 
   const dayOfWeek = date.getDay();
@@ -105,12 +164,12 @@ export const createBookingByBarber = async ({
   const time = format(date, "HH:mm");
 
   // =====================================================
-  // VERIFICAR HORÁRIO FIXO
+  // 12. VERIFICAR HORÁRIO FIXO
   // =====================================================
 
   const fixedSchedule = await db.fixedSchedule.findFirst({
     where: {
-      barbershopId: service.barbershopId,
+      barbershopId,
       dayOfWeek,
       time,
       active: true,
@@ -124,7 +183,7 @@ export const createBookingByBarber = async ({
   }
 
   // =====================================================
-  // VERIFICAR OUTRO AGENDAMENTO
+  // 13. VERIFICAR OUTRO AGENDAMENTO
   // =====================================================
 
   const existingBooking = await db.booking.findFirst({
@@ -143,28 +202,77 @@ export const createBookingByBarber = async ({
   }
 
   // =====================================================
-  // CRIAR AGENDAMENTO
+  // 14. CRIAR AGENDAMENTO
   // =====================================================
 
-  await db.booking.create({
+  const booking = await db.booking.create({
     data: {
       userId: userId || null,
+
       clientName: normalizedClientName,
+
       clientPhone: normalizedClientPhone,
-      serviceId,
+
+      // O primeiro serviço continua sendo colocado em
+      // serviceId para manter compatibilidade com o modelo.
+      serviceId: uniqueServiceIds[0],
+
       date,
+
       status: "PENDING",
+
+      // =================================================
+      // VALORES FINANCEIROS
+      // =================================================
+      //
+      // Estes valores são calculados no servidor e
+      // persistidos no banco.
+
+      subtotal: discountResult.subtotal,
+
+      discount: discountResult.discount,
+
+      total: discountResult.total,
+
+      // =================================================
+      // TODOS OS SERVIÇOS
+      // =================================================
+
+      bookingItems: {
+        create: services.map((service) => ({
+          serviceId: service.id,
+
+          // Guarda o preço do serviço no momento
+          // em que o agendamento foi criado.
+          price: service.price,
+        })),
+      },
     },
   });
 
   // =====================================================
-  // ATUALIZAR PÁGINAS
+  // 15. ATUALIZAR PÁGINAS
   // =====================================================
 
   revalidatePath("/");
+  revalidatePath("/bookings");
   revalidatePath("/barbeiro/dashboard");
+
+  // =====================================================
+  // 16. RETORNAR VALORES CALCULADOS
+  // =====================================================
 
   return {
     success: true,
+
+    bookingId: booking.id,
+
+    subtotal: discountResult.subtotal,
+
+    discount: discountResult.discount,
+
+    total: discountResult.total,
+
+    discountDescription: discountResult.description,
   };
 };
