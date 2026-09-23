@@ -1,19 +1,28 @@
 import Header from "./_components/header";
+
 import { Button } from "./_components/ui/button";
+
 import { quickSearchOptions } from "./_constants/search";
-import Search from "./_components/search";
+
 import Image from "next/image";
+
 import BarbershopItem from "./_components/barbershop-item";
 
 import { db } from "@/lib/prisma";
+
 import { getServerSession } from "next-auth";
+
 import { authOptions } from "@/lib/auth";
+
 import { redirect } from "next/navigation";
 
 import { format } from "date-fns";
+
 import { ptBR } from "date-fns/locale";
 
 import { MessageCircle } from "lucide-react";
+
+import Link from "next/link";
 
 const Home = async () => {
   // =====================================================
@@ -78,25 +87,42 @@ const Home = async () => {
           </section>
 
           {/* =====================================================
-              BUSCA
-          ===================================================== */}
-
-          <section className="w-full">
-            <div className="w-full">
-              <Search />
-            </div>
-          </section>
-
-          {/* =====================================================
               BUSCA RÁPIDA
           ===================================================== */}
 
           <section>
-            <div className="flex w-full gap-3 overflow-x-auto pb-2 scrollbar-none [&::-webkit-scrollbar]:hidden">
+            <div className="flex w-full gap-3 overflow-x-auto pb-2">
               {quickSearchOptions.map((option) => (
-                <Button
+                <Link
                   key={option.title}
-                  className="h-12 shrink-0 gap-2 px-3 text-sm text-gray-600 sm:px-4"
+                  href={
+                    barbershops.length > 0
+                      ? `/barbershops/${barbershops[0].id}?service=${encodeURIComponent(
+                          option.serviceName,
+                        )}`
+                      : "/barbershops"
+                  }
+                  className="
+                    inline-flex
+                    h-12
+                    shrink-0
+                    items-center
+                    justify-center
+                    gap-2
+                    rounded-md
+                    border
+                    border-input
+                    bg-background
+                    px-3
+                    text-sm
+                    font-medium
+                    text-gray-600
+                    shadow-sm
+                    transition-colors
+                    hover:bg-accent
+                    hover:text-accent-foreground
+                    sm:px-4
+                  "
                 >
                   <Image
                     src={option.imageUrl}
@@ -107,7 +133,7 @@ const Home = async () => {
                   />
 
                   <span className="whitespace-nowrap">{option.title}</span>
-                </Button>
+                </Link>
               ))}
             </div>
           </section>
@@ -122,7 +148,6 @@ const Home = async () => {
                 src="/pag.jpeg"
                 alt="Banner da barbearia"
                 fill
-
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 90vw, 1024px"
                 className="object-cover"
                 priority
@@ -207,7 +232,7 @@ const Home = async () => {
               ================================================= */}
 
               <a
-                href="https://wa.me/5511998821533?text=Olá!%20Gostaria%20de%20agendar%20um%20horário%20na%20Barbearia%20SpaçoVip."
+                href="https://wa.me/5511998821533?text=Olá!%20Gostaria%20de%20agendar%20um%20horário%20na%20Barbearia%20SpaçoVip"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block"

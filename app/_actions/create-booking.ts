@@ -3,6 +3,7 @@
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 import { calculateBookingDiscount } from "@/app/utils/booking-discount";
+import { validateBusinessSchedule } from "@/lib/business-schedule";
 import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 
@@ -10,14 +11,12 @@ interface CreateBookingParams {
   serviceIds: string[];
   date: string;
   time: string;
-  userId?: string;
 }
 
 export const createBooking = async ({
   serviceIds,
   date,
   time,
-  userId,
 }: CreateBookingParams) => {
   // =====================================================
   // 1. VERIFICAR AUTENTICAÇÃO
@@ -41,21 +40,7 @@ export const createBooking = async ({
   const uniqueServiceIds = [...new Set(serviceIds)];
 
   // =====================================================
-  // 3. DEFINIR O USUÁRIO DO AGENDAMENTO
-  // =====================================================
-
-  // Cliente:
-  // - sempre cria o próprio agendamento.
-  //
-  // Barbeiro:
-  // - pode criar agendamento para outro usuário através
-  //   do parâmetro userId.
-
-  const bookingUserId =
-    session.user.role === "BARBER" && userId ? userId : session.user.id;
-
-  // =====================================================
-  // 4. VALIDAR DATA
+  // 3. VALIDAR DATA
   // =====================================================
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -63,7 +48,7 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 5. VALIDAR HORÁRIO
+  // 4. VALIDAR HORÁRIO
   // =====================================================
 
   if (!/^\d{2}:\d{2}$/.test(time)) {
@@ -72,42 +57,26 @@ export const createBooking = async ({
 
   const [hours, minutes] = time.split(":").map(Number);
 
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+  if (
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
     throw new Error("Horário inválido.");
   }
 
   // =====================================================
-  // 6. REGRA OFICIAL DE FUNCIONAMENTO
+  // 5. DESCOBRIR O DIA DA SEMANA
   // =====================================================
-  //
-  // A barbearia atende somente:
-  //
-  // TERÇA A SÁBADO
-  //
-  // Domingo = 0
-  // Segunda = 1
-  // Terça = 2
-  // Quarta = 3
-  // Quinta = 4
-  // Sexta = 5
-  // Sábado = 6
-  //
-  // Horários:
-  //
-  // 08:00 até 11:00
-  // 13:00 até 20:00
-  //
-  // 12:00 fica bloqueado para almoço.
 
+  // Usamos UTC ao meio-dia apenas para descobrir
+  // corretamente o dia da semana da data escolhida,
+  // sem sofrer alteração por fuso horário.
   const [year, month, day] = date.split("-").map(Number);
 
-  /*
-   * Criamos uma data UTC apenas para descobrir
-   * corretamente o dia da semana da data informada.
-   *
-   * Usamos meio-dia UTC para evitar problemas de mudança
-   * de dia causados pelo fuso horário.
-   */
   const dateForDayOfWeek = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
 
   if (Number.isNaN(dateForDayOfWeek.getTime())) {
@@ -116,33 +85,8 @@ export const createBooking = async ({
 
   const dayOfWeek = dateForDayOfWeek.getUTCDay();
 
-  // Domingo e segunda-feira não possuem atendimento.
-  if (dayOfWeek === 0 || dayOfWeek === 1) {
-    throw new Error("A barbearia funciona somente de terça a sábado.");
-  }
-
-  // Horários oficialmente permitidos.
-  const allowedTimes = [
-    "08:00",
-    "09:00",
-    "10:00",
-    "11:00",
-    "13:00",
-    "14:00",
-    "15:00",
-    "16:00",
-    "17:00",
-    "18:00",
-    "19:00",
-    "20:00",
-  ];
-
-  if (!allowedTimes.includes(time)) {
-    throw new Error("Este horário não está disponível para agendamento.");
-  }
-
   // =====================================================
-  // 7. BUSCAR OS SERVIÇOS NO BANCO
+  // 6. BUSCAR OS SERVIÇOS NO BANCO
   // =====================================================
 
   const services = await db.barbershopService.findMany({
@@ -159,7 +103,7 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 8. GARANTIR QUE OS SERVIÇOS SÃO DA MESMA BARBEARIA
+  // 7. GARANTIR QUE OS SERVIÇOS SÃO DA MESMA BARBEARIA
   // =====================================================
 
   const barbershopId = services[0].barbershopId;
@@ -175,24 +119,42 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 9. CALCULAR DESCONTO NO SERVIDOR
+  // 8. VALIDAR AGENDA DA BARBEARIA
+  // =====================================================
+
+  // A configuração vem diretamente do banco.
+
+  // Isso verifica:
+  //
+  // - se o dia está aberto;
+  // - se o horário está liberado;
+  // - se o horário existe na configuração.
+  //
+  // Não usamos mais uma lista fixa de horários aqui.
+
+  await validateBusinessSchedule({
+    barbershopId,
+    dayOfWeek,
+    time,
+  });
+
+  // =====================================================
+  // 9. DEFINIR O USUÁRIO DO AGENDAMENTO
+  // =====================================================
+
+  // Cliente cria o próprio agendamento.
+  //
+  // Se futuramente o barbeiro utilizar esta action para
+  // criar para outro cliente, essa regra pode ser ampliada.
+  const bookingUserId = session.user.id;
+
+  // =====================================================
+  // 10. CALCULAR DESCONTO NO SERVIDOR
   // =====================================================
 
   // O desconto é calculado novamente no servidor.
   //
   // Não confiamos nos valores enviados pelo navegador.
-  //
-  // Exemplos:
-  //
-  // Corte + Barba
-  // R$35 + R$35 = R$70
-  // Desconto = R$10
-  // Total = R$60
-  //
-  // Barba + Pézinho
-  // R$35 + R$10 = R$45
-  // Desconto = R$5
-  // Total = R$40
 
   const discountResult = calculateBookingDiscount(
     services.map((service) => ({
@@ -202,8 +164,14 @@ export const createBooking = async ({
   );
 
   // =====================================================
-  // 10. VERIFICAR HORÁRIO FIXO
+  // 11. VERIFICAR HORÁRIO FIXO
   // =====================================================
+
+  // IMPORTANTE:
+  // Não apagamos nem alteramos FixedSchedule.
+  //
+  // Mesmo que um horário seja bloqueado na configuração
+  // da agenda, os horários fixos continuam preservados.
 
   const fixedSchedule = await db.fixedSchedule.findFirst({
     where: {
@@ -221,20 +189,18 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 11. CRIAR DATA COMPLETA DO AGENDAMENTO
+  // 12. CRIAR DATA COMPLETA DO AGENDAMENTO
   // =====================================================
 
-  /*
-   * O horário informado é tratado como horário de São Paulo.
-   *
-   * Exemplo:
-   *
-   * 2026-09-19 + 10:00
-   *
-   * será:
-   *
-   * 19/09/2026 às 10:00 no horário de São Paulo.
-   */
+  // O horário informado é tratado como horário de São Paulo.
+  //
+  // Exemplo:
+  //
+  // 2026-09-19 + 10:00
+  //
+  // será:
+  //
+  // 19/09/2026 às 10:00 no horário de São Paulo.
 
   const bookingDate = new Date(`${date}T${time}:00-03:00`);
 
@@ -243,7 +209,7 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 12. VERIFICAR SE O HORÁRIO JÁ ESTÁ OCUPADO
+  // 13. VERIFICAR SE O HORÁRIO JÁ ESTÁ OCUPADO
   // =====================================================
 
   const slotStart = new Date(bookingDate);
@@ -271,15 +237,15 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 13. CRIAR O AGENDAMENTO
+  // 14. CRIAR O AGENDAMENTO
   // =====================================================
 
   const booking = await db.booking.create({
     data: {
       userId: bookingUserId,
 
-      // O primeiro serviço continua sendo usado pelo
-      // campo serviceId legado.
+      // O primeiro serviço continua sendo usado
+      // pelo campo serviceId legado.
       serviceId: uniqueServiceIds[0],
 
       date: bookingDate,
@@ -287,7 +253,7 @@ export const createBooking = async ({
       status: "PENDING",
 
       // =================================================
-      // VALORES FINANCEIROS DO AGENDAMENTO
+      // VALORES FINANCEIROS
       // =================================================
 
       subtotal: discountResult.subtotal,
@@ -319,7 +285,7 @@ export const createBooking = async ({
   });
 
   // =====================================================
-  // 14. ATUALIZAR AS PÁGINAS
+  // 15. ATUALIZAR AS PÁGINAS
   // =====================================================
 
   revalidatePath("/");
@@ -327,7 +293,7 @@ export const createBooking = async ({
   revalidatePath("/barbeiro/dashboard");
 
   // =====================================================
-  // 15. RETORNAR RESULTADO
+  // 16. RETORNAR RESULTADO
   // =====================================================
 
   return {

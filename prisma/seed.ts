@@ -105,6 +105,17 @@ async function seedDatabase() {
 
     // =====================================================
     // 4. HORÁRIOS FIXOS
+    //
+    // IMPORTANTE:
+    // Esses horários continuam separados da configuração
+    // da agenda.
+    //
+    // Portanto:
+    // - Alan continua sendo cliente fixo
+    // - Diego continua sendo cliente fixo
+    // - etc.
+    //
+    // BusinessDay e BusinessTimeSlot NÃO apagam esses dados.
     // =====================================================
 
     const fixedSchedules = [
@@ -211,7 +222,7 @@ async function seedDatabase() {
     ];
 
     // =====================================================
-    // 5. EVITAR DUPLICAÇÃO DOS HORÁRIOS
+    // 5. EVITAR DUPLICAÇÃO DOS HORÁRIOS FIXOS
     // =====================================================
 
     for (const schedule of fixedSchedules) {
@@ -243,9 +254,167 @@ async function seedDatabase() {
         });
       }
     }
+
     // =====================================================
-    // LOGIN DO BARBEIRO
+    // 6. CONFIGURAÇÃO DOS DIAS DA SEMANA
+    //
+    // JavaScript:
+    //
+    // 0 = Domingo
+    // 1 = Segunda
+    // 2 = Terça
+    // 3 = Quarta
+    // 4 = Quinta
+    // 5 = Sexta
+    // 6 = Sábado
+    //
+    // Regra inicial da SpaçoVip:
+    //
+    // Domingo  ❌ FECHADO
+    // Segunda  ❌ FECHADO
+    // Terça    ✅ ABERTO
+    // Quarta   ✅ ABERTO
+    // Quinta   ✅ ABERTO
+    // Sexta    ✅ ABERTO
+    // Sábado   ✅ ABERTO
     // =====================================================
+
+    const businessDays = [
+      {
+        dayOfWeek: 0,
+        active: false,
+      },
+      {
+        dayOfWeek: 1,
+        active: false,
+      },
+      {
+        dayOfWeek: 2,
+        active: true,
+      },
+      {
+        dayOfWeek: 3,
+        active: true,
+      },
+      {
+        dayOfWeek: 4,
+        active: true,
+      },
+      {
+        dayOfWeek: 5,
+        active: true,
+      },
+      {
+        dayOfWeek: 6,
+        active: true,
+      },
+    ];
+
+    // =====================================================
+    // 7. CADASTRAR / ATUALIZAR DIAS
+    // =====================================================
+
+    for (const day of businessDays) {
+      await prisma.businessDay.upsert({
+        where: {
+          barbershopId_dayOfWeek: {
+            barbershopId: barbershop.id,
+            dayOfWeek: day.dayOfWeek,
+          },
+        },
+        update: {},
+        create: {
+          barbershopId: barbershop.id,
+          dayOfWeek: day.dayOfWeek,
+          active: day.active,
+        },
+      });
+    }
+
+    // =====================================================
+    // 8. HORÁRIOS DISPONÍVEIS
+    //
+    // 12:00 fica propositalmente fora do horário de
+    // atendimento.
+    //
+    // A configuração terá TODOS os horários cadastrados.
+    // Isso permite que o barbeiro posteriormente possa
+    // bloquear/desbloquear individualmente pelo dashboard.
+    //
+    // 08:00
+    // 09:00
+    // 10:00
+    // 11:00
+    // 12:00  -> BLOQUEADO
+    // 13:00
+    // 14:00
+    // 15:00
+    // 16:00
+    // 17:00
+    // 18:00
+    // 19:00
+    // 20:00
+    // =====================================================
+
+    const timeList = [
+      "08:00",
+      "09:00",
+      "10:00",
+      "11:00",
+      "12:00",
+      "13:00",
+      "14:00",
+      "15:00",
+      "16:00",
+      "17:00",
+      "18:00",
+      "19:00",
+      "20:00",
+    ];
+
+    // =====================================================
+    // 9. CADASTRAR / ATUALIZAR HORÁRIOS
+    //
+    // Para cada dia criamos todos os horários.
+    //
+    // Domingo e segunda:
+    //   todos começam bloqueados.
+    //
+    // Terça a sábado:
+    //   08:00-11:00 -> ativos
+    //   12:00       -> bloqueado
+    //   13:00-20:00 -> ativos
+    // =====================================================
+
+    for (const day of businessDays) {
+      for (const time of timeList) {
+        const isLunchTime = time === "12:00";
+
+        const active = day.active === true && !isLunchTime;
+
+        await prisma.businessTimeSlot.upsert({
+          where: {
+            barbershopId_dayOfWeek_time: {
+              barbershopId: barbershop.id,
+              dayOfWeek: day.dayOfWeek,
+              time,
+            },
+          },
+          update: {},
+          create: {
+            barbershopId: barbershop.id,
+            dayOfWeek: day.dayOfWeek,
+            time,
+            active,
+          },
+        });
+      }
+    }
+
+    // =====================================================
+    // 10. LOGIN DO BARBEIRO
+    // =====================================================
+
     const rafael = await prisma.user.upsert({
       where: {
         email: "rafael.spacovip26@gmail.com",
@@ -263,11 +432,23 @@ async function seedDatabase() {
 
     console.log("Rafael:", rafael);
 
-    // console.log(`👤 Usuários atualizados para BARBER: ${barber.count}`);
+    // =====================================================
+    // 11. RESUMO
+    // =====================================================
+
     console.log("======================================");
     console.log("✅ Barbearia cadastrada/atualizada!");
     console.log("✅ Serviços cadastrados/atualizados!");
     console.log("✅ Horários fixos cadastrados/atualizados!");
+    console.log("✅ Dias da agenda configurados!");
+    console.log("✅ Horários da agenda configurados!");
+    console.log("======================================");
+    console.log("📅 Domingo: FECHADO");
+    console.log("📅 Segunda: FECHADO");
+    console.log("📅 Terça a sábado: ABERTO");
+    console.log("🕛 12:00: BLOQUEADO");
+    console.log("🕗 08:00-11:00: DISPONÍVEL");
+    console.log("🕐 13:00-20:00: DISPONÍVEL");
     console.log("======================================");
   } catch (error) {
     console.error("❌ Erro ao executar seed:", error);

@@ -10,6 +10,7 @@ import DeleteBookingButton from "./_components/delete-booking-button";
 import CreateBookingButton from "./_components/create-booking-button";
 import BarberSchedule from "./_components/barber-schedule";
 import BookingStatusButton from "./_components/booking-status-button";
+import BusinessScheduleSettings from "./_components/business-schedule-settings";
 import CustomerDebts from "./_components/customer-debts";
 import LogoutButton from "./_components/logout-button";
 
@@ -434,6 +435,12 @@ const BarberDashboardPage = async () => {
             ))}
           </div>
         </section>
+
+        {/* =================================================
+            CONFIGURAÇÃO DA AGENDA
+        ================================================= */}
+
+        <BusinessScheduleSettings />
 
         {/* =================================================
             AGENDAMENTOS

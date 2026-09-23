@@ -6,6 +6,11 @@ import { toast } from "sonner";
 
 import { getBarberSchedule } from "@/app/_actions/get-barber-schedule";
 
+import {
+  getBusinessSchedule,
+  type BusinessScheduleDay,
+} from "@/app/barbeiro/dashboard/_actions/business-schedule";
+
 import CreateBookingButton from "./create-booking-button";
 
 // =====================================================
@@ -67,25 +72,6 @@ interface BarberScheduleProps {
 }
 
 // =====================================================
-// HORÁRIOS DISPONÍVEIS
-// =====================================================
-
-const TIME_LIST = [
-  "08:00",
-  "09:00",
-  "10:00",
-  "11:00",
-  "13:00",
-  "14:00",
-  "15:00",
-  "16:00",
-  "17:00",
-  "18:00",
-  "19:00",
-  "20:00",
-];
-
-// =====================================================
 // COMPONENTE
 // =====================================================
 
@@ -109,6 +95,12 @@ const BarberSchedule = ({
     }[]
   >([]);
 
+  const [businessSchedule, setBusinessSchedule] = useState<
+    BusinessScheduleDay[]
+  >([]);
+
+  const [businessScheduleLoaded, setBusinessScheduleLoaded] = useState(false);
+
   const [isPending, startTransition] = useTransition();
 
   // =====================================================
@@ -117,9 +109,7 @@ const BarberSchedule = ({
 
   const formatDateForServer = (date: Date) => {
     const year = date.getFullYear();
-
     const month = String(date.getMonth() + 1).padStart(2, "0");
-
     const day = String(date.getDate()).padStart(2, "0");
 
     return `${year}-${month}-${day}`;
@@ -150,17 +140,37 @@ const BarberSchedule = ({
       try {
         console.log("Consultando agenda:", dateString);
 
-        const result = await getBarberSchedule(dateString);
+        // =================================================
+        // CARREGA:
+        // 1. AGENDAMENTOS
+        // 2. HORÁRIOS FIXOS
+        // 3. CONFIGURAÇÃO DA AGENDA
+        // =================================================
 
-        setBookings(result.bookings);
-        setFixedSchedules(result.fixedSchedules);
+        const [scheduleResult, businessScheduleResult] = await Promise.all([
+          getBarberSchedule(dateString),
+          getBusinessSchedule(),
+        ]);
+
+        setBookings(scheduleResult.bookings);
+
+        setFixedSchedules(scheduleResult.fixedSchedules);
+
+        setBusinessSchedule(businessScheduleResult);
+
+        setBusinessScheduleLoaded(true);
       } catch (error) {
         console.error("ERRO AO CARREGAR AGENDA:", error);
 
         toast.error("Não foi possível carregar a agenda.");
 
         setBookings([]);
+
         setFixedSchedules([]);
+
+        setBusinessSchedule([]);
+
+        setBusinessScheduleLoaded(false);
       }
     });
   }, []);
@@ -207,6 +217,62 @@ const BarberSchedule = ({
   };
 
   // =====================================================
+  // DIA DA SEMANA DA DATA SELECIONADA
+  //
+  // JS:
+  // 0 = Domingo
+  // 1 = Segunda
+  // 2 = Terça
+  // 3 = Quarta
+  // 4 = Quinta
+  // 5 = Sexta
+  // 6 = Sábado
+  // =====================================================
+
+  const selectedDayOfWeek = selectedDate.getDay();
+
+  // =====================================================
+  // CONFIGURAÇÃO DO DIA ATUAL
+  // =====================================================
+
+  const selectedBusinessDay = businessSchedule.find(
+    (day) => day.dayOfWeek === selectedDayOfWeek,
+  );
+
+  // =====================================================
+  // HORÁRIOS CONFIGURADOS PARA O DIA
+  //
+  // Não existe mais TIME_LIST fixo.
+  //
+  // Os horários vêm do banco de dados.
+  // =====================================================
+
+  const configuredTimes =
+    selectedBusinessDay?.timeSlots.map((slot) => slot.time).sort() ?? [];
+
+  // =====================================================
+  // ENCONTRAR CONFIGURAÇÃO DE UM HORÁRIO
+  // =====================================================
+
+  const getTimeSlotConfig = (time: string) => {
+    return selectedBusinessDay?.timeSlots.find((slot) => slot.time === time);
+  };
+
+  // =====================================================
+  // VERIFICAR SE O HORÁRIO ESTÁ DISPONÍVEL
+  // =====================================================
+
+  const isTimeActive = (time: string) => {
+    if (!selectedBusinessDay?.active) {
+      return false;
+    }
+
+    const slot = getTimeSlotConfig(time);
+
+    return slot?.active === true;
+  };
+
+  // =====================================================
   // ENCONTRAR AGENDAMENTO
   // =====================================================
 
@@ -233,6 +299,32 @@ const BarberSchedule = ({
   };
 
   // =====================================================
+  // HORÁRIOS QUE DEVEM SER EXIBIDOS
+  //
+  // Normalmente são os horários configurados no banco.
+  //
+  // Também adicionamos horários de bookings/fixos que
+  // eventualmente não estejam mais ativos/configurados,
+  // para não esconder compromissos existentes.
+  // =====================================================
+
+  const displayTimes = Array.from(
+    new Set([
+      ...configuredTimes,
+      ...fixedSchedules.map((schedule) => schedule.time),
+      ...bookings.map((booking) => {
+        const bookingDate = new Date(booking.date);
+
+        return bookingDate.toLocaleTimeString("pt-BR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        });
+      }),
+    ]),
+  ).sort();
+
+  // =====================================================
   // RENDER
   // =====================================================
 
@@ -251,7 +343,9 @@ const BarberSchedule = ({
           </p>
         </div>
 
-        {/* NAVEGAÇÃO */}
+        {/* =================================================
+            NAVEGAÇÃO
+        ================================================= */}
 
         <div className="flex items-center gap-2">
           <button
@@ -281,14 +375,60 @@ const BarberSchedule = ({
       </div>
 
       {/* =================================================
+          CARREGANDO CONFIGURAÇÃO
+      ================================================= */}
+
+      {!businessScheduleLoaded && (
+        <div className="mb-4 rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-center text-sm text-zinc-400">
+          Carregando configuração da agenda...
+        </div>
+      )}
+
+      {/* =================================================
+          DIA FECHADO
+      ================================================= */}
+
+      {businessScheduleLoaded &&
+        selectedBusinessDay &&
+        !selectedBusinessDay.active && (
+          <div className="mb-4 rounded-xl border border-red-900/50 bg-red-950/30 p-4 text-center">
+            <p className="font-semibold text-red-400">
+              Barbearia fechada neste dia
+            </p>
+
+            <p className="mt-1 text-sm text-zinc-500">
+              Novos agendamentos não podem ser realizados.
+            </p>
+          </div>
+        )}
+
+      {/* =================================================
+          DIA NÃO CONFIGURADO
+      ================================================= */}
+
+      {businessScheduleLoaded && !selectedBusinessDay && (
+        <div className="mb-4 rounded-xl border border-yellow-900/50 bg-yellow-950/30 p-4 text-center">
+          <p className="font-semibold text-yellow-400">Dia sem configuração</p>
+
+          <p className="mt-1 text-sm text-zinc-500">
+            Este dia ainda não possui horários configurados.
+          </p>
+        </div>
+      )}
+
+      {/* =================================================
           HORÁRIOS
       ================================================= */}
 
       <div className="max-h-162.5 space-y-3 overflow-y-auto pr-2">
-        {TIME_LIST.map((time) => {
+        {displayTimes.map((time) => {
           const booking = getBookingByTime(time);
 
           const fixedSchedule = getFixedScheduleByTime(time);
+
+          const timeSlotConfig = getTimeSlotConfig(time);
+
+          const timeActive = isTimeActive(time);
 
           return (
             <div
@@ -303,6 +443,8 @@ const BarberSchedule = ({
 
               {/* =================================================
                   HORÁRIO FIXO
+                  
+                  HORÁRIO FIXO SEMPRE CONTINUA VISÍVEL.
               ================================================= */}
 
               {fixedSchedule ? (
@@ -312,10 +454,19 @@ const BarberSchedule = ({
                   </p>
 
                   <p className="text-sm text-zinc-500">Horário fixo</p>
+
+                  {!timeActive && (
+                    <p className="mt-1 text-xs text-yellow-500">
+                      Atenção: horário atualmente bloqueado.
+                    </p>
+                  )}
                 </div>
               ) : booking ? (
                 /* =================================================
-                   AGENDAMENTO
+                   AGENDAMENTO EXISTENTE
+
+                   AGENDAMENTOS EXISTENTES NÃO SÃO ESCONDIDOS
+                   QUANDO UM HORÁRIO É BLOQUEADO.
                 ================================================= */
 
                 <div className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 p-3">
@@ -359,6 +510,56 @@ const BarberSchedule = ({
                       R$ {booking.totalPrice.toFixed(2)}
                     </span>
                   </div>
+
+                  {!timeActive && (
+                    <p className="mt-2 text-xs text-yellow-500">
+                      Horário atualmente bloqueado para novos agendamentos.
+                    </p>
+                  )}
+                </div>
+              ) : !businessScheduleLoaded ? (
+                /* =================================================
+                   CONFIGURAÇÃO AINDA CARREGANDO
+                ================================================= */
+
+                <div className="flex-1">
+                  <p className="text-sm text-zinc-500">Carregando...</p>
+                </div>
+              ) : !selectedBusinessDay?.active ? (
+                /* =================================================
+                   DIA FECHADO
+                ================================================= */
+
+                <div className="flex-1">
+                  <p className="font-semibold text-red-400">Fechado</p>
+
+                  <p className="text-sm text-zinc-500">
+                    Novos agendamentos indisponíveis.
+                  </p>
+                </div>
+              ) : !timeSlotConfig ? (
+                /* =================================================
+                   HORÁRIO FORA DA CONFIGURAÇÃO
+                ================================================= */
+
+                <div className="flex-1">
+                  <p className="font-semibold text-zinc-500">Não configurado</p>
+
+                  <p className="text-sm text-zinc-600">
+                    Este horário não está configurado na agenda.
+                  </p>
+                </div>
+              ) : !timeSlotConfig.active ? (
+                /* =================================================
+                   HORÁRIO BLOQUEADO
+                ================================================= */
+
+                <div className="flex-1">
+                  <p className="font-semibold text-yellow-500">Bloqueado</p>
+
+                  <p className="text-sm text-zinc-500">
+                    Novos agendamentos indisponíveis.
+                  </p>
                 </div>
               ) : (
                 /* =================================================
@@ -382,6 +583,22 @@ const BarberSchedule = ({
             </div>
           );
         })}
+
+        {/* =================================================
+            NENHUM HORÁRIO CONFIGURADO
+        ================================================= */}
+
+        {businessScheduleLoaded && displayTimes.length === 0 && (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 text-center">
+            <p className="font-semibold text-zinc-400">
+              Nenhum horário configurado
+            </p>
+
+            <p className="mt-1 text-sm text-zinc-600">
+              Configure os horários na seção &quot;Configuração da Agenda&quot;.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* =================================================

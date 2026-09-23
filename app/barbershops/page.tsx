@@ -6,47 +6,41 @@ import { redirect } from "next/navigation";
 interface BarbershopsPageProps {
   searchParams: Promise<{
     title?: string;
+    service?: string;
   }>;
 }
 
 const BarbershopsPage = async ({ searchParams }: BarbershopsPageProps) => {
-  // Recebe o parâmetro enviado pela URL
-  // Exemplo:
-  // /barbershops?title=corte
-  const { title = "" } = await searchParams;
+  const { title = "", service = "" } = await searchParams;
 
-  // Procura a primeira barbearia que possua
-  // o texto digitado em algum dos campos abaixo
+  const searchTerm = service.trim() || title.trim();
+
   const barbershop = await db.barbershop.findFirst({
     where: {
       OR: [
         {
-          // Procura pelo nome
           name: {
-            contains: title,
+            contains: searchTerm,
             mode: "insensitive",
           },
         },
         {
-          // Procura pela descrição
           description: {
-            contains: title,
+            contains: searchTerm,
             mode: "insensitive",
           },
         },
         {
-          // Procura pelo endereço
           address: {
-            contains: title,
+            contains: searchTerm,
             mode: "insensitive",
           },
         },
         {
-          // Procura pelo nome de algum serviço
           services: {
             some: {
               name: {
-                contains: title,
+                contains: searchTerm,
                 mode: "insensitive",
               },
             },
@@ -56,32 +50,34 @@ const BarbershopsPage = async ({ searchParams }: BarbershopsPageProps) => {
     },
   });
 
-  // Caso encontre uma barbearia,
-  // redireciona automaticamente
   if (barbershop) {
+    if (service.trim()) {
+      redirect(
+        `/barbershops/${barbershop.id}?service=${encodeURIComponent(service.trim())}`,
+      );
+    }
+
     redirect(
-      `/barbershops/${barbershop.id}?search=${encodeURIComponent(title)}`,
+      `/barbershops/${barbershop.id}?search=${encodeURIComponent(title.trim())}`,
     );
   }
 
-  // Caso não encontre nenhuma,
-  // exibe a tela abaixo
   return (
-    <div>
-      {/* Cabeçalho */}
+    <div className="min-h-screen bg-background">
       <Header />
 
-      {/* Campo de pesquisa */}
-      <div className="my-6 px-5">
+      <main className="mx-auto w-full max-w-5xl px-4 py-6">
         <Search />
-      </div>
 
-      {/* Mensagem */}
-      <div className="px-5">
-        <h2 className="text-sm font-semibold">
-          Nenhum resultado encontrado para {title}
-        </h2>
-      </div>
+        <div className="mt-8 rounded-lg border p-6 text-center">
+          <h1 className="text-lg font-bold">Nenhuma barbearia encontrada</h1>
+
+          <p className="mt-2 text-sm text-muted-foreground">
+            Não encontramos resultados para{" "}
+            <strong>{searchTerm || "sua busca"}</strong>.
+          </p>
+        </div>
+      </main>
     </div>
   );
 };

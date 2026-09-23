@@ -3,6 +3,7 @@
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 import { calculateBookingDiscount } from "@/app/utils/booking-discount";
+import { validateBusinessSchedule } from "@/lib/business-schedule";
 import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 
@@ -136,43 +137,6 @@ export const createBookingByBarber = async ({
   const dayOfWeek = dateForDayOfWeek.getUTCDay();
 
   // =====================================================
-  // 7. REGRA DE FUNCIONAMENTO
-  // =====================================================
-  //
-  // A barbearia atende de terça a sábado.
-  //
-  // Domingo = 0
-  // Segunda = 1
-  // =====================================================
-
-  if (dayOfWeek === 0 || dayOfWeek === 1) {
-    throw new Error("A barbearia funciona somente de terça a sábado.");
-  }
-
-  // =====================================================
-  // 8. HORÁRIOS PERMITIDOS
-  // =====================================================
-
-  const allowedTimes = [
-    "08:00",
-    "09:00",
-    "10:00",
-    "11:00",
-    "13:00",
-    "14:00",
-    "15:00",
-    "16:00",
-    "17:00",
-    "18:00",
-    "19:00",
-    "20:00",
-  ];
-
-  if (!allowedTimes.includes(time)) {
-    throw new Error("Este horário não está disponível para agendamento.");
-  }
-
-  // =====================================================
   // 9. BUSCAR TODOS OS SERVIÇOS
   // =====================================================
 
@@ -204,7 +168,15 @@ export const createBookingByBarber = async ({
       "Os serviços selecionados pertencem a barbearias diferentes.",
     );
   }
+  // =====================================================
+  // VALIDAR AGENDA DA BARBEARIA
+  // =====================================================
 
+  await validateBusinessSchedule({
+    barbershopId,
+    dayOfWeek,
+    time,
+  });
   // =====================================================
   // 11. CALCULAR DESCONTO
   // =====================================================

@@ -21,6 +21,10 @@ import {
 
 import { Sheet, SheetContent, SheetTrigger } from "@/app/_components/ui/sheet";
 
+// =====================================================
+// PROPS
+// =====================================================
+
 interface BarbershopPageProps {
   params: Promise<{
     id: string;
@@ -28,23 +32,28 @@ interface BarbershopPageProps {
 
   searchParams: Promise<{
     search?: string;
+    service?: string;
   }>;
 }
+
+// =====================================================
+// PÁGINA
+// =====================================================
 
 const BarbershopPage = async ({
   params,
   searchParams,
 }: BarbershopPageProps) => {
   const { id } = await params;
-  const { search } = await searchParams;
+
+  const { search, service } = await searchParams;
 
   const session = await getServerSession(authOptions);
 
-  /*
-   * ============================================================
-   * BUSCA A BARBEARIA
-   * ============================================================
-   */
+  // ===================================================
+  // BUSCAR BARBEARIA
+  // ===================================================
+
   const barbershop = await db.barbershop.findUnique({
     where: {
       id,
@@ -70,11 +79,10 @@ const BarbershopPage = async ({
     },
   });
 
-  /*
-   * ============================================================
-   * BARBEARIA NÃO ENCONTRADA
-   * ============================================================
-   */
+  // ===================================================
+  // BARBEARIA NÃO ENCONTRADA
+  // ===================================================
+
   if (!barbershop) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
@@ -87,7 +95,19 @@ const BarbershopPage = async ({
 
           <Link
             href="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+            className="
+              mt-4
+              inline-flex
+              items-center
+              justify-center
+              rounded-md
+              bg-primary
+              px-4
+              py-2
+              text-sm
+              font-medium
+              text-primary-foreground
+            "
           >
             Voltar para o início
           </Link>
@@ -96,14 +116,10 @@ const BarbershopPage = async ({
     );
   }
 
-  /*
-   * ============================================================
-   * AVALIAÇÃO
-   * ============================================================
-   *
-   * O cliente só pode avaliar depois de possuir um agendamento
-   * concluído nessa barbearia.
-   */
+  // ===================================================
+  // AVALIAÇÕES
+  // ===================================================
+
   let canReview = false;
   let alreadyReviewed = false;
 
@@ -111,7 +127,9 @@ const BarbershopPage = async ({
     const completedBooking = await db.booking.findFirst({
       where: {
         userId: session.user.id,
+
         status: "COMPLETED",
+
         bookingItems: {
           some: {
             service: {
@@ -120,6 +138,7 @@ const BarbershopPage = async ({
           },
         },
       },
+
       select: {
         id: true,
       },
@@ -137,49 +156,64 @@ const BarbershopPage = async ({
     alreadyReviewed = !!existingReview;
   }
 
-  /*
-   * ============================================================
-   * SERVIÇOS
-   * ============================================================
-   *
-   * O Prisma utiliza Decimal para o preço.
-   *
-   * Como o ServiceItem é Client Component,
-   * convertemos o preço para Number antes de enviá-lo.
-   */
+  // ===================================================
+  // SERVIÇOS
+  // ===================================================
+
   const services = barbershop.services.map((service) => ({
     ...service,
     price: Number(service.price),
   }));
 
-  /*
-   * ============================================================
-   * PESQUISA
-   * ============================================================
-   */
-  const normalizedSearch = search?.trim().toLowerCase() ?? "";
+  // ===================================================
+  // PESQUISA NORMAL
+  // ===================================================
 
-  /*
-   * ============================================================
-   * PÁGINA
-   * ============================================================
-   *
-   * ServiceCartProvider mantém o carrinho disponível
-   * para todos os ServiceItem desta página.
-   */
+  const normalizedSearch = search?.trim().toLowerCase() ?? "";
+  const normalizedService = service?.trim().toLowerCase() ?? "";
+  // ===================================================
+  // PÁGINA
+  // ===================================================
+
   return (
     <ServiceCartProvider>
       <div className="mx-auto min-h-screen w-full max-w-5xl">
-        {/* =====================================================
+        {/* =================================================
             HEADER
-        ====================================================== */}
-        <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur">
+        ================================================= */}
+
+        <header
+          className="
+            sticky
+            top-0
+            z-50
+            flex
+            h-16
+            items-center
+            justify-between
+            border-b
+            border-border
+            bg-background/95
+            px-4
+            backdrop-blur
+          "
+        >
           <div className="flex items-center gap-2">
             <Link
               href="/"
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:bg-muted"
+              className="
+                inline-flex
+                h-9
+                w-9
+                shrink-0
+                items-center
+                justify-center
+                rounded-md
+                hover:bg-muted
+              "
             >
               <ChevronLeftIcon />
+
               <span className="sr-only">Voltar</span>
             </Link>
 
@@ -200,7 +234,8 @@ const BarbershopPage = async ({
 
           {/* =================================================
               MENU
-          ================================================== */}
+          ================================================= */}
+
           <Sheet>
             <SheetTrigger render={<Button variant="ghost" size="icon" />}>
               <MenuIcon />
@@ -214,10 +249,11 @@ const BarbershopPage = async ({
           </Sheet>
         </header>
 
-        {/* =====================================================
+        {/* =================================================
             BANNER
-        ====================================================== */}
-        <div className="relative h-72 w-full overflow-hidden sm:h-96 npx prisma generate">
+        ================================================= */}
+
+        <div className="relative h-72 w-full overflow-hidden sm:h-96">
           <Image
             src={barbershop.imageUrl}
             alt={barbershop.name}
@@ -227,10 +263,8 @@ const BarbershopPage = async ({
             className="object-cover object-center"
           />
 
-          {/* Escurece levemente a imagem para destacar as informações */}
           <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/30 to-transparent" />
 
-          {/* Informações sobre a imagem */}
           <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-8">
             <h1 className="text-2xl font-bold text-white sm:text-4xl">
               {barbershop.name}
@@ -238,21 +272,21 @@ const BarbershopPage = async ({
 
             <div className="mt-2 flex items-start gap-2 text-sm text-white/90 sm:text-base">
               <MapPinIcon className="mt-0.5 h-4 w-4 shrink-0" />
+
               <span>{barbershop.address}</span>
             </div>
           </div>
         </div>
 
-        {/* =====================================================
+        {/* =================================================
             INFORMAÇÕES PRINCIPAIS
-        ====================================================== */}
+        ================================================= */}
+
         <section className="space-y-5 p-4 sm:p-6">
-          {/* ===================================================
-              NOME / ENDEREÇO / NOTA
-          ==================================================== */}
-          {/* ===================================================
+          {/* =================================================
               SOBRE
-          ==================================================== */}
+          ================================================= */}
+
           <section>
             <h2 className="mb-2 text-lg font-bold">Sobre</h2>
 
@@ -261,9 +295,10 @@ const BarbershopPage = async ({
             </p>
           </section>
 
-          {/* ===================================================
+          {/* =================================================
               SERVIÇOS
-          ==================================================== */}
+          ================================================= */}
+
           <section>
             <div className="mb-4">
               <h2 className="text-lg font-bold">Serviços</h2>
@@ -281,20 +316,25 @@ const BarbershopPage = async ({
                   </p>
                 </div>
               ) : (
-                services.map((service) => {
-                  /*
-                   * Verifica se o serviço corresponde à busca.
-                   */
-                  const match =
+                services.map((serviceItem) => {
+                  const searchMatch =
                     normalizedSearch.length > 0 &&
-                    (service.name.toLowerCase().includes(normalizedSearch) ||
-                      service.description
+                    (serviceItem.name
+                      .toLowerCase()
+                      .includes(normalizedSearch) ||
+                      serviceItem.description
                         .toLowerCase()
                         .includes(normalizedSearch));
 
+                  const serviceMatch =
+                    normalizedService.length > 0 &&
+                    serviceItem.name.trim().toLowerCase() === normalizedService;
+
+                  const match = searchMatch || serviceMatch;
+
                   return (
                     <div
-                      key={service.id}
+                      key={serviceItem.id}
                       id={match ? "resultado" : undefined}
                       className={
                         match
@@ -303,7 +343,7 @@ const BarbershopPage = async ({
                       }
                     >
                       <ServiceItem
-                        service={service}
+                        service={serviceItem}
                         barbershop={{
                           name: barbershop.name,
                         }}
@@ -315,9 +355,9 @@ const BarbershopPage = async ({
             </div>
           </section>
 
-          {/* ============================================================
-    AVALIAÇÕES
-============================================================ */}
+          {/* =================================================
+              AVALIAÇÕES
+          ================================================= */}
 
           <section className="mt-8">
             <div className="mb-4">
@@ -328,9 +368,9 @@ const BarbershopPage = async ({
               </p>
             </div>
 
-            {/* ============================================================
-      RESUMO DAS AVALIAÇÕES
-  ============================================================ */}
+            {/* =================================================
+                RESUMO DAS AVALIAÇÕES
+            ================================================= */}
 
             <div className="rounded-xl border bg-background p-4">
               <div className="flex items-center gap-3">
@@ -356,9 +396,9 @@ const BarbershopPage = async ({
                 </span>
               </div>
 
-              {/* ========================================================
-        ÁREA DO CLIENTE LOGADO
-    ======================================================== */}
+              {/* =================================================
+                  ÁREA DO CLIENTE LOGADO
+              ================================================= */}
 
               {session?.user?.role === "CUSTOMER" && (
                 <div className="mt-4">
@@ -394,9 +434,9 @@ const BarbershopPage = async ({
                 </div>
               )}
 
-              {/* ========================================================
-        AVALIAÇÕES RECOLHIDAS
-    ======================================================== */}
+              {/* =================================================
+                  AVALIAÇÕES RECOLHIDAS
+              ================================================= */}
 
               <details className="mt-5">
                 <summary className="cursor-pointer list-none">
@@ -468,9 +508,10 @@ const BarbershopPage = async ({
             </div>
           </section>
 
-          {/* ===================================================
+          {/* =================================================
               TELEFONES
-          ==================================================== */}
+          ================================================= */}
+
           {barbershop.phones && barbershop.phones.length > 0 && (
             <section>
               <h2 className="mb-4 text-lg font-bold">Telefones</h2>
@@ -484,28 +525,17 @@ const BarbershopPage = async ({
           )}
         </section>
 
-        {/* =====================================================
+        {/* =================================================
             SCROLL PARA RESULTADO DA PESQUISA
-        ====================================================== */}
-        {search && <ScrollToResult />}
+        ================================================= */}
+
+        {(search || service) && <ScrollToResult />}
       </div>
 
-      {/* =======================================================
+      {/* =================================================
           CARRINHO DE SERVIÇOS
+      ================================================= */}
 
-          O ServiceCart fica dentro do Provider.
-
-          Portanto:
-
-          ServiceItem
-              ↓
-          ServiceCartProvider
-              ↓
-          ServiceCart
-
-          Todos os serviços selecionados compartilham
-          o mesmo estado do carrinho.
-      ======================================================== */}
       <ServiceCart
         barbershopId={barbershop.id}
         barbershopName={barbershop.name}
