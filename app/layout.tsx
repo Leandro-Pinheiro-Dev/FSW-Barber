@@ -10,6 +10,8 @@ import Footer from "./_components/footer";
 
 import AuthProvider from "./_provider/auth";
 
+import PushNotifications from "./_components/push-notifications";
+
 const geistSans = Geist({
   variable: "--font-sans",
 });
@@ -55,6 +57,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
     >
       <body className="flex min-h-full justify-center">
+        <PushNotifications />
         <main className="w-full max-w-5xl">
           <AuthProvider>
             {children}

@@ -24,6 +24,8 @@ import { MessageCircle } from "lucide-react";
 
 import Link from "next/link";
 
+import EnablePushNotifications from "@/app/_components/enable-push-notifications";
+
 const Home = async () => {
   // =====================================================
   // VERIFICA AUTENTICAÇÃO
@@ -63,7 +65,7 @@ const Home = async () => {
         ===================================================== */}
 
         <Header />
-
+        <EnablePushNotifications />
         {/* =====================================================
             CONTEÚDO
         ===================================================== */}
