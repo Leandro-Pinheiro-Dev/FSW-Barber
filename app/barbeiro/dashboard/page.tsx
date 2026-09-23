@@ -14,6 +14,8 @@ import BusinessScheduleSettings from "./_components/business-schedule-settings";
 import CustomerDebts from "./_components/customer-debts";
 import LogoutButton from "./_components/logout-button";
 
+import EnablePushNotifications from "@/app/_components/enable-push-notifications";
+
 import { getDashboardSummary } from "@/app/_actions/get-dashboard-summary";
 
 type DashboardBookingItem = {
@@ -281,7 +283,11 @@ const BarberDashboardPage = async () => {
             </p>
           </div>
 
-          <LogoutButton />
+          <div className="flex flex-wrap items-center gap-2">
+            <EnablePushNotifications />
+
+            <LogoutButton />
+          </div>
         </header>
 
         {/* =================================================

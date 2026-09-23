@@ -25,8 +25,8 @@ self.addEventListener("push", (event) => {
     body: data.body || "Você recebeu uma nova notificação.",
 
     // Ícone do PWA
-    icon: "/icon-192.png",
-    badge: "/icon-192.png",
+    icon: "/icon_192.jpg",
+    badge: "/icon_192.jpg",
 
     // Vibração
     vibrate: [200, 100, 200, 100, 300],

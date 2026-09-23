@@ -70,18 +70,39 @@ export default function EnablePushNotifications() {
   };
 
   return (
-    <button
-      type="button"
-      onClick={enableNotifications}
-      disabled={loading || enabled}
-      className="rounded-md border px-4 py-2 text-sm font-medium"
-    >
-      {loading
-        ? "Ativando..."
-        : enabled
-          ? "Notificações ativadas ✓"
-          : "Ativar notificações 🔔"}
-    </button>
+    <div className="flex w-full justify-end px-4 pt-3 sm:px-5">
+      <button
+        type="button"
+        onClick={enableNotifications}
+        disabled={loading || enabled}
+        className="
+  inline-flex
+  h-10
+  items-center
+  justify-center
+  gap-2
+  rounded-lg
+  border
+  border-white
+  bg-gray-500
+  px-4
+  text-sm
+  font-medium
+  text-white
+  shadow-sm
+  transition-colors
+  hover:bg-gray-600
+  disabled:cursor-not-allowed
+  disabled:opacity-60
+"
+      >
+        {loading
+          ? "Ativando..."
+          : enabled
+            ? "Notificações ativadas ✓"
+            : "Ativar notificações 🔔"}
+      </button>
+    </div>
   );
 }
 

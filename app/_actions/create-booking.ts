@@ -1,10 +1,17 @@
 "use server";
 
 import { authOptions } from "@/lib/auth";
+
 import { db } from "@/lib/prisma";
+
 import { calculateBookingDiscount } from "@/app/utils/booking-discount";
+
 import { validateBusinessSchedule } from "@/lib/business-schedule";
+
+import { sendPushNotification } from "@/lib/push";
+
 import { getServerSession } from "next-auth";
+
 import { revalidatePath } from "next/cache";
 
 interface CreateBookingParams {
@@ -75,6 +82,7 @@ export const createBooking = async ({
   // Usamos UTC ao meio-dia apenas para descobrir
   // corretamente o dia da semana da data escolhida,
   // sem sofrer alteração por fuso horário.
+
   const [year, month, day] = date.split("-").map(Number);
 
   const dateForDayOfWeek = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
@@ -123,14 +131,12 @@ export const createBooking = async ({
   // =====================================================
 
   // A configuração vem diretamente do banco.
-
+  //
   // Isso verifica:
   //
   // - se o dia está aberto;
   // - se o horário está liberado;
   // - se o horário existe na configuração.
-  //
-  // Não usamos mais uma lista fixa de horários aqui.
 
   await validateBusinessSchedule({
     barbershopId,
@@ -143,9 +149,7 @@ export const createBooking = async ({
   // =====================================================
 
   // Cliente cria o próprio agendamento.
-  //
-  // Se futuramente o barbeiro utilizar esta action para
-  // criar para outro cliente, essa regra pode ser ampliada.
+
   const bookingUserId = session.user.id;
 
   // =====================================================
@@ -164,20 +168,14 @@ export const createBooking = async ({
   );
 
   // =====================================================
-  // VERIFICAR HORÁRIO FIXO
+  // 11. VERIFICAR HORÁRIO FIXO
   // =====================================================
+
   //
   // FixedSchedule é a regra semanal.
   //
   // FixedScheduleException é uma exceção para uma data
   // específica, permitindo liberar aquele horário.
-  //
-  // Exemplo:
-  //
-  // Sexta 08:00 = Cris
-  //
-  // 25/09/2026 → liberado
-  // 02/10/2026 → reservado normalmente
   //
 
   const fixedSchedule = await db.fixedSchedule.findFirst({
@@ -220,19 +218,12 @@ export const createBooking = async ({
     // HORÁRIO FOI LIBERADO PARA OUTROS CLIENTES
     // ===================================================
   }
+
   // =====================================================
   // 12. CRIAR DATA COMPLETA DO AGENDAMENTO
   // =====================================================
 
   // O horário informado é tratado como horário de São Paulo.
-  //
-  // Exemplo:
-  //
-  // 2026-09-19 + 10:00
-  //
-  // será:
-  //
-  // 19/09/2026 às 10:00 no horário de São Paulo.
 
   const bookingDate = new Date(`${date}T${time}:00-03:00`);
 
@@ -317,7 +308,111 @@ export const createBooking = async ({
   });
 
   // =====================================================
-  // 15. ATUALIZAR AS PÁGINAS
+  // 15. ENVIAR PUSH PARA O BARBEIRO
+  // =====================================================
+
+  // IMPORTANTE:
+  //
+  // O Push é enviado DEPOIS que o agendamento foi salvo.
+  //
+  // Se o Push falhar, NÃO cancelamos o agendamento.
+  // O cliente já conseguiu criar sua reserva normalmente.
+
+  try {
+    // Buscar os usuários que possuem perfil de barbeiro.
+    const barbers = await db.user.findMany({
+      where: {
+        role: "BARBER",
+      },
+      select: {
+        id: true,
+        pushSubscriptions: true,
+      },
+    });
+
+    // ===================================================
+    // FORMATAR INFORMAÇÕES DO AGENDAMENTO
+    // ===================================================
+
+    const clientName = session.user.name?.trim() || "Um cliente";
+
+    const servicesText = services.map((service) => service.name).join(" + ");
+
+    // Data já está salva corretamente como horário de São Paulo.
+    //
+    // Aqui usamos Intl para mostrar a data ao barbeiro
+    // no formato brasileiro.
+
+    const formattedDate = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(bookingDate);
+
+    // ===================================================
+    // ENVIAR PARA CADA BARBEIRO
+    // ===================================================
+
+    for (const barber of barbers) {
+      for (const subscription of barber.pushSubscriptions) {
+        try {
+          await sendPushNotification(subscription, {
+            title: "Novo agendamento ✂️",
+            body: `${clientName} agendou ${servicesText} para ${formattedDate} às ${time}.`,
+            url: "/barbeiro/dashboard",
+          });
+
+          console.log(`Push enviado para o barbeiro ${barber.id}.`);
+        } catch (error: unknown) {
+          console.error(
+            `Erro ao enviar Push para o barbeiro ${barber.id}:`,
+            error,
+          );
+
+          // ===============================================
+          // REMOVER INSCRIÇÃO EXPIRADA
+          // ===============================================
+
+          const statusCode =
+            typeof error === "object" &&
+            error !== null &&
+            "statusCode" in error &&
+            typeof error.statusCode === "number"
+              ? error.statusCode
+              : undefined;
+
+          // 404 ou 410 normalmente significa que
+          // a inscrição daquele dispositivo expirou.
+          if (statusCode === 404 || statusCode === 410) {
+            try {
+              await db.pushSubscription.delete({
+                where: {
+                  id: subscription.id,
+                },
+              });
+
+              console.log(`PushSubscription ${subscription.id} removida.`);
+            } catch (deleteError) {
+              console.error(
+                "Erro ao remover PushSubscription expirada:",
+                deleteError,
+              );
+            }
+          }
+        }
+      }
+    }
+  } catch (error) {
+    // ===================================================
+    // O PUSH NÃO PODE IMPEDIR O AGENDAMENTO
+    // ===================================================
+
+    console.error("Erro geral ao enviar notificação para o barbeiro:", error);
+  }
+
+  // =====================================================
+  // 16. ATUALIZAR AS PÁGINAS
   // =====================================================
 
   revalidatePath("/");
@@ -325,7 +420,7 @@ export const createBooking = async ({
   revalidatePath("/barbeiro/dashboard");
 
   // =====================================================
-  // 16. RETORNAR RESULTADO
+  // 17. RETORNAR RESULTADO
   // =====================================================
 
   return {
