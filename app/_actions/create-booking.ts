@@ -164,14 +164,21 @@ export const createBooking = async ({
   );
 
   // =====================================================
-  // 11. VERIFICAR HORÁRIO FIXO
+  // VERIFICAR HORÁRIO FIXO
   // =====================================================
-
-  // IMPORTANTE:
-  // Não apagamos nem alteramos FixedSchedule.
   //
-  // Mesmo que um horário seja bloqueado na configuração
-  // da agenda, os horários fixos continuam preservados.
+  // FixedSchedule é a regra semanal.
+  //
+  // FixedScheduleException é uma exceção para uma data
+  // específica, permitindo liberar aquele horário.
+  //
+  // Exemplo:
+  //
+  // Sexta 08:00 = Cris
+  //
+  // 25/09/2026 → liberado
+  // 02/10/2026 → reservado normalmente
+  //
 
   const fixedSchedule = await db.fixedSchedule.findFirst({
     where: {
@@ -183,11 +190,36 @@ export const createBooking = async ({
   });
 
   if (fixedSchedule) {
-    throw new Error(
-      `Este horário já está reservado para ${fixedSchedule.clientName}.`,
-    );
-  }
+    // ===================================================
+    // VERIFICAR SE ESTE HORÁRIO FOI LIBERADO NESTA DATA
+    // ===================================================
 
+    const fixedScheduleException = await db.fixedScheduleException.findUnique({
+      where: {
+        barbershopId_date_time: {
+          barbershopId,
+          date: new Date(Date.UTC(year, month - 1, day)),
+          time,
+        },
+      },
+    });
+
+    // ===================================================
+    // SE NÃO EXISTIR EXCEÇÃO:
+    // HORÁRIO CONTINUA RESERVADO PARA O FIXO
+    // ===================================================
+
+    if (!fixedScheduleException) {
+      throw new Error(
+        `Este horário já está reservado para ${fixedSchedule.clientName}.`,
+      );
+    }
+
+    // ===================================================
+    // SE EXISTIR EXCEÇÃO:
+    // HORÁRIO FOI LIBERADO PARA OUTROS CLIENTES
+    // ===================================================
+  }
   // =====================================================
   // 12. CRIAR DATA COMPLETA DO AGENDAMENTO
   // =====================================================

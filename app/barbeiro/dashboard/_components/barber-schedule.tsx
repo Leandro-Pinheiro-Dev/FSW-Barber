@@ -11,6 +11,11 @@ import {
   type BusinessScheduleDay,
 } from "@/app/barbeiro/dashboard/_actions/business-schedule";
 
+import {
+  releaseFixedSchedule,
+  restoreFixedSchedule,
+} from "@/app/barbeiro/dashboard/_actions/fixed-schedule-exception";
+
 import CreateBookingButton from "./create-booking-button";
 
 // =====================================================
@@ -90,8 +95,10 @@ const BarberSchedule = ({
 
   const [fixedSchedules, setFixedSchedules] = useState<
     {
+      id: string;
       clientName: string;
       time: string;
+      released: boolean;
     }[]
   >([]);
 
@@ -447,19 +454,128 @@ const BarberSchedule = ({
                   HORÁRIO FIXO SEMPRE CONTINUA VISÍVEL.
               ================================================= */}
 
-              {fixedSchedule ? (
-                <div className="flex-1">
-                  <p className="font-semibold text-red-400">
-                    {fixedSchedule.clientName}
-                  </p>
-
-                  <p className="text-sm text-zinc-500">Horário fixo</p>
-
-                  {!timeActive && (
-                    <p className="mt-1 text-xs text-yellow-500">
-                      Atenção: horário atualmente bloqueado.
+              {fixedSchedule && !fixedSchedule.released ? (
+                <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-semibold text-red-400">
+                      {fixedSchedule.clientName}
                     </p>
-                  )}
+
+                    <p className="text-sm text-zinc-500">Horário fixo</p>
+
+                    {!timeActive && (
+                      <p className="mt-1 text-xs text-yellow-500">
+                        Atenção: horário atualmente bloqueado.
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => {
+                      const confirmed = window.confirm(
+                        `Liberar o horário das ${time} para outros clientes nesta data?`,
+                      );
+
+                      if (!confirmed) {
+                        return;
+                      }
+
+                      startTransition(async () => {
+                        try {
+                          await releaseFixedSchedule({
+                            date: formatDateForServer(selectedDate),
+                            time,
+                          });
+
+                          toast.success(`${time} liberado para esta data.`);
+
+                          loadSchedule(selectedDate);
+                        } catch (error) {
+                          console.error(error);
+
+                          toast.error(
+                            error instanceof Error
+                              ? error.message
+                              : "Não foi possível liberar o horário.",
+                          );
+                        }
+                      });
+                    }}
+                    className="rounded-lg border border-red-800 bg-red-950/40 px-4 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-900/40 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    🔓 Liberar
+                  </button>
+                </div>
+              ) : fixedSchedule && fixedSchedule.released ? (
+                <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-semibold text-green-400">Disponível</p>
+
+                    <p className="text-sm text-zinc-500">
+                      {fixedSchedule.clientName} — horário fixo liberado
+                    </p>
+
+                    {!timeActive && (
+                      <p className="mt-1 text-xs text-yellow-500">
+                        Atenção: horário atualmente bloqueado pela agenda.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {!booking && timeActive && (
+                      <CreateBookingButton
+                        users={users}
+                        services={services}
+                        initialDate={createLocalDateWithTime(
+                          selectedDate,
+                          time,
+                        )}
+                      />
+                    )}
+
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => {
+                        const confirmed = window.confirm(
+                          `Bloquear novamente o horário das ${time} para ${fixedSchedule.clientName}?`,
+                        );
+
+                        if (!confirmed) {
+                          return;
+                        }
+
+                        startTransition(async () => {
+                          try {
+                            await restoreFixedSchedule({
+                              date: formatDateForServer(selectedDate),
+                              time,
+                            });
+
+                            toast.success(
+                              `${time} voltou a ficar reservado para ${fixedSchedule.clientName}.`,
+                            );
+
+                            loadSchedule(selectedDate);
+                          } catch (error) {
+                            console.error(error);
+
+                            toast.error(
+                              error instanceof Error
+                                ? error.message
+                                : "Não foi possível bloquear o horário.",
+                            );
+                          }
+                        });
+                      }}
+                      className="rounded-lg border border-green-800 bg-green-950/40 px-4 py-2 text-sm font-semibold text-green-400 transition hover:bg-green-900/40 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      🔒 Bloquear
+                    </button>
+                  </div>
                 </div>
               ) : booking ? (
                 /* =================================================

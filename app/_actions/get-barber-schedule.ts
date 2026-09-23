@@ -22,7 +22,6 @@ export interface BarberScheduleBooking {
   serviceName: string;
   services: BarberScheduleService[];
 
-  // Valores financeiros salvos no Booking
   subtotal: number;
   discount: number;
   totalPrice: number;
@@ -34,6 +33,12 @@ export interface BarberFixedSchedule {
   id: string;
   time: string;
   clientName: string;
+
+  // ===================================================
+  // INDICA SE O CLIENTE FIXO FOI LIBERADO NESTA DATA
+  // ===================================================
+
+  released: boolean;
 }
 
 export interface BarberScheduleResult {
@@ -44,6 +49,10 @@ export interface BarberScheduleResult {
 export const getBarberSchedule = async (
   date: string,
 ): Promise<BarberScheduleResult> => {
+  // =====================================================
+  // AUTENTICAÇÃO
+  // =====================================================
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
@@ -54,18 +63,17 @@ export const getBarberSchedule = async (
     throw new Error("Acesso permitido somente ao barbeiro.");
   }
 
-  if (!date || typeof date !== "string") {
-    throw new Error("Data não informada.");
-  }
-
   // =====================================================
   // VALIDAR DATA
   // =====================================================
 
+  if (!date || typeof date !== "string") {
+    throw new Error("Data não informada.");
+  }
+
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
 
   if (!match) {
-    console.error("DATA RECEBIDA:", date);
     throw new Error("Formato de data inválido.");
   }
 
@@ -80,7 +88,6 @@ export const getBarberSchedule = async (
     validationDate.getUTCMonth() !== month - 1 ||
     validationDate.getUTCDate() !== day
   ) {
-    console.error("DATA INVÁLIDA:", date);
     throw new Error("Data inválida para consultar a agenda.");
   }
 
@@ -96,13 +103,19 @@ export const getBarberSchedule = async (
 
   const endOfDay = new Date(`${date}T23:59:59.999-03:00`);
 
-  console.log("=================================");
-  console.log("AGENDA");
-  console.log("DATA RECEBIDA:", date);
-  console.log("INÍCIO:", startOfDay);
-  console.log("FINAL:", endOfDay);
-  console.log("DIA DA SEMANA:", dayOfWeek);
-  console.log("=================================");
+  // =====================================================
+  // BUSCAR BARBEARIA
+  // =====================================================
+
+  const barbershop = await db.barbershop.findFirst({
+    select: {
+      id: true,
+    },
+  });
+
+  if (!barbershop) {
+    throw new Error("Barbearia não encontrada.");
+  }
 
   // =====================================================
   // BUSCAR AGENDAMENTOS
@@ -142,36 +155,12 @@ export const getBarberSchedule = async (
   });
 
   // =====================================================
-  // DEBUG
-  // =====================================================
-
-  console.log("=================================");
-  console.log("AGENDAMENTOS ENCONTRADOS:", bookings.length);
-
-  bookings.forEach((booking) => {
-    console.log({
-      id: booking.id,
-      date: booking.date,
-      status: booking.status,
-      clientName: booking.clientName,
-      userName: booking.user?.name,
-      serviceId: booking.serviceId,
-      bookingItems: booking.bookingItems.length,
-
-      subtotal: Number(booking.subtotal),
-      discount: Number(booking.discount),
-      total: Number(booking.total),
-    });
-  });
-
-  console.log("=================================");
-
-  // =====================================================
   // BUSCAR HORÁRIOS FIXOS
   // =====================================================
 
   const fixedSchedules = await db.fixedSchedule.findMany({
     where: {
+      barbershopId: barbershop.id,
       dayOfWeek,
       active: true,
     },
@@ -180,6 +169,34 @@ export const getBarberSchedule = async (
       time: "asc",
     },
   });
+
+  // =====================================================
+  // BUSCAR EXCEÇÕES DA DATA
+  //
+  // IMPORTANTE:
+  //
+  // A data é armazenada como @db.Date.
+  // Por isso usamos UTC 00:00.
+  // =====================================================
+
+  const fixedScheduleExceptions = await db.fixedScheduleException.findMany({
+    where: {
+      barbershopId: barbershop.id,
+      date: validationDate,
+    },
+
+    select: {
+      time: true,
+    },
+  });
+
+  // =====================================================
+  // CRIAR SET COM OS HORÁRIOS LIBERADOS
+  // =====================================================
+
+  const releasedTimes = new Set(
+    fixedScheduleExceptions.map((exception) => exception.time),
+  );
 
   // =====================================================
   // FORMATAR AGENDAMENTOS
@@ -209,17 +226,6 @@ export const getBarberSchedule = async (
 
     // -------------------------------------------------
     // VALORES FINANCEIROS
-    //
-    // IMPORTANTE:
-    // NÃO recalculamos o total somando os serviços.
-    //
-    // O Booking já possui:
-    //
-    // subtotal
-    // discount
-    // total
-    //
-    // Esses são os valores oficiais do agendamento.
     // -------------------------------------------------
 
     const subtotal = Number(booking.subtotal);
@@ -286,6 +292,10 @@ export const getBarberSchedule = async (
       id: schedule.id,
       time: schedule.time,
       clientName: schedule.clientName,
+
+      // true = liberado nesta data
+      // false = reservado normalmente
+      released: releasedTimes.has(schedule.time),
     })),
   };
 };

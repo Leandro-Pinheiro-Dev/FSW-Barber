@@ -112,7 +112,7 @@ const Home = async () => {
                     rounded-md
                     border
                     border-input
-                    bg-background
+                    bg-white
                     px-3
                     text-sm
                     font-medium

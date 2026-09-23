@@ -55,18 +55,23 @@ interface Service {
   price: number;
 }
 
-interface ServiceCartContextData {
-  services: Service[];
-  addService: (service: Service) => void;
-  removeService: (serviceId: string) => void;
-  clearCart: () => void;
-  isInCart: (serviceId: string) => boolean;
-  total: number;
-}
-
 // =====================================================
 // CONTEXTO
 // =====================================================
+
+interface ServiceCartContextData {
+  services: Service[];
+
+  addService: (service: Service) => void;
+
+  removeService: (serviceId: string) => void;
+
+  clearCart: () => void;
+
+  isInCart: (serviceId: string) => boolean;
+
+  total: number;
+}
 
 const ServiceCartContext = createContext<ServiceCartContextData | null>(null);
 
@@ -76,16 +81,19 @@ const ServiceCartContext = createContext<ServiceCartContextData | null>(null);
 
 interface ServiceCartProviderProps {
   children: ReactNode;
+
   initialService?: Service | null;
 }
 
-export function ServiceCartProvider({
-  children,
-  initialService,
-}: ServiceCartProviderProps) {
-  const [services, setServices] = useState<Service[]>(
-    () => (initialService ? [initialService] : []),
-  );
+export function ServiceCartProvider({ children }: ServiceCartProviderProps) {
+  // ---------------------------------------------------
+  // O CARRINHO COMEÇA VAZIO
+  //
+  // O serviço da busca rápida NÃO é adicionado
+  // automaticamente.
+  // ---------------------------------------------------
+
+  const [services, setServices] = useState<Service[]>([]);
 
   // ---------------------------------------------------
   // ADICIONAR SERVIÇO
@@ -135,7 +143,7 @@ export function ServiceCartProvider({
   );
 
   // ---------------------------------------------------
-  // SUBTOTAL
+  // TOTAL
   // ---------------------------------------------------
 
   const total = useMemo(() => {
@@ -197,11 +205,14 @@ interface FixedScheduleData {
 
 interface ServiceCartProps {
   barbershopId: string;
+
   barbershopName: string;
 
-  // Serviço que veio pela busca rápida.
-  // Quando existir, será colocado automaticamente
-  // no carrinho e o carrinho será aberto.
+  // Serviço vindo da busca rápida.
+  //
+  // Ele NÃO é colocado automaticamente no carrinho.
+  // Serve apenas para manter compatibilidade com
+  // a chamada existente do componente.
   initialService?: Service | null;
 }
 
@@ -212,7 +223,6 @@ interface ServiceCartProps {
 export function ServiceCart({
   barbershopId,
   barbershopName,
-  initialService,
 }: ServiceCartProps) {
   const { services, addService, removeService, clearCart } = useServiceCart();
 
@@ -220,7 +230,7 @@ export function ServiceCart({
   // ESTADOS
   // ===================================================
 
-  const [open, setOpen] = useState(Boolean(initialService));
+  const [open, setOpen] = useState(false);
 
   const [selectedDate, setSelectedDate] = useState<Date>();
 
@@ -234,9 +244,9 @@ export function ServiceCart({
 
   const [creatingBooking, setCreatingBooking] = useState(false);
 
-  // ---------------------------------------------------
+  // ===================================================
   // CONFIGURAÇÃO DA AGENDA
-  // ---------------------------------------------------
+  // ===================================================
 
   const [businessSchedule, setBusinessSchedule] = useState<
     BusinessScheduleDay[]
@@ -245,10 +255,6 @@ export function ServiceCart({
   const [loadingBusinessSchedule, setLoadingBusinessSchedule] = useState(false);
 
   const [businessScheduleLoaded, setBusinessScheduleLoaded] = useState(false);
-
-  // ===================================================
-  // SERVIÇO VINDO DA BUSCA RÁPIDA
-  // ===================================================
 
   // ===================================================
   // DATA MÍNIMA
@@ -275,7 +281,7 @@ export function ServiceCart({
   }, [today]);
 
   // ===================================================
-  // CALCULAR DESCONTO
+  // DESCONTO
   // ===================================================
 
   const discountResult = useMemo(() => {
@@ -288,6 +294,18 @@ export function ServiceCart({
   }, [services]);
 
   // ===================================================
+  // FORMATAR DATA PARA O SERVIDOR
+  //
+  // IMPORTANTE:
+  // Não usamos toISOString() porque isso pode mudar
+  // o dia por causa do fuso horário.
+  // ===================================================
+
+  const formatDateForServer = useCallback((date: Date) => {
+    return format(date, "yyyy-MM-dd");
+  }, []);
+
+  // ===================================================
   // BUSCAR CONFIGURAÇÃO DA AGENDA
   // ===================================================
 
@@ -298,6 +316,7 @@ export function ServiceCart({
       const result = await getBusinessSchedule();
 
       setBusinessSchedule(result ?? []);
+
       setBusinessScheduleLoaded(true);
     } catch (error) {
       console.error("Erro ao carregar configuração da agenda:", error);
@@ -323,7 +342,7 @@ export function ServiceCart({
   };
 
   // ===================================================
-  // BUSCAR CONFIGURAÇÃO DE UM DIA
+  // BUSCAR CONFIGURAÇÃO DO DIA
   // ===================================================
 
   const getBusinessDay = useCallback(
@@ -334,7 +353,7 @@ export function ServiceCart({
   );
 
   // ===================================================
-  // VERIFICAR SE UM DIA ESTÁ ABERTO
+  // VERIFICAR SE O DIA ESTÁ ABERTO
   // ===================================================
 
   const isBusinessDayActive = (date: Date) => {
@@ -354,7 +373,7 @@ export function ServiceCart({
   };
 
   // ===================================================
-  // OBTER HORÁRIOS ATIVOS DO DIA
+  // HORÁRIOS ATIVOS DO DIA
   // ===================================================
 
   const availableTimes = useMemo(() => {
@@ -394,7 +413,7 @@ export function ServiceCart({
     }
 
     // -------------------------------------------------
-    // VERIFICAR SE O DIA ESTÁ ABERTO
+    // VERIFICAR DIA DA SEMANA
     // -------------------------------------------------
 
     const dayOfWeek = date.getDay();
@@ -409,6 +428,10 @@ export function ServiceCart({
       return;
     }
 
+    // -------------------------------------------------
+    // VERIFICAR SE A BARBEARIA ESTÁ ABERTA
+    // -------------------------------------------------
+
     if (!businessDay.active) {
       toast.error("A barbearia está fechada neste dia.");
 
@@ -418,7 +441,7 @@ export function ServiceCart({
     }
 
     // -------------------------------------------------
-    // VERIFICAR SE EXISTEM HORÁRIOS ATIVOS
+    // VERIFICAR HORÁRIOS ATIVOS
     // -------------------------------------------------
 
     const activeTimes = businessDay.timeSlots.filter((slot) => slot.active);
@@ -438,6 +461,16 @@ export function ServiceCart({
     try {
       setLoadingAvailability(true);
 
+      // IMPORTANTE:
+      //
+      // Usamos "date" diretamente.
+      //
+      // Não usamos selectedDate aqui porque setSelectedDate()
+      // é assíncrono e selectedDate ainda poderia conter
+      // a data anterior.
+
+      const dateString = formatDateForServer(date);
+
       const [bookingsResult, fixedSchedulesResult] = await Promise.all([
         getBookings({
           date,
@@ -445,7 +478,7 @@ export function ServiceCart({
 
         getFixedSchedules({
           barbershopId,
-          dayOfWeek,
+          date: dateString,
         }),
       ]);
 
@@ -492,6 +525,15 @@ export function ServiceCart({
 
     // -------------------------------------------------
     // 2. HORÁRIO FIXO
+    //
+    // IMPORTANTE:
+    //
+    // getFixedSchedules() agora já remove da resposta
+    // os horários fixos que foram liberados pelo barbeiro
+    // naquela data.
+    //
+    // Portanto, se o horário estiver aqui, ele realmente
+    // continua bloqueado.
     // -------------------------------------------------
 
     const fixedScheduleExists = fixedSchedules.some(
@@ -545,7 +587,7 @@ export function ServiceCart({
     }
 
     // -------------------------------------------------
-    // VERIFICAR NOVAMENTE A CONFIGURAÇÃO
+    // VERIFICAR DIA
     // -------------------------------------------------
 
     if (!isBusinessDayActive(selectedDate)) {
@@ -553,6 +595,10 @@ export function ServiceCart({
 
       return;
     }
+
+    // -------------------------------------------------
+    // VERIFICAR HORÁRIO NOVAMENTE
+    // -------------------------------------------------
 
     if (isTimeUnavailable(selectedTime)) {
       toast.error("Este horário não está mais disponível.");
@@ -564,10 +610,14 @@ export function ServiceCart({
       setCreatingBooking(true);
 
       // ------------------------------------------------
-      // O DESCONTO É CALCULADO NO SERVIDOR
+      // DATA NO FORMATO DO SERVIDOR
       // ------------------------------------------------
 
-      const date = format(selectedDate, "yyyy-MM-dd");
+      const date = formatDateForServer(selectedDate);
+
+      // ------------------------------------------------
+      // CRIAR AGENDAMENTO
+      // ------------------------------------------------
 
       const result = await createBooking({
         serviceIds: services.map((service) => service.id),
@@ -590,7 +640,7 @@ export function ServiceCart({
       }
 
       // ------------------------------------------------
-      // LIMPAR CARRINHO
+      // LIMPAR
       // ------------------------------------------------
 
       clearCart();
@@ -665,7 +715,7 @@ export function ServiceCart({
       </SheetTrigger>
 
       {/* =================================================
-          CONTEÚDO DO CARRINHO
+          CONTEÚDO
       ================================================= */}
 
       <SheetContent
@@ -684,9 +734,9 @@ export function ServiceCart({
         </SheetHeader>
 
         <div className="space-y-6 pb-8 pt-6">
-          {/* =============================================
-              SERVIÇOS SELECIONADOS
-          ============================================= */}
+          {/* =================================================
+              SERVIÇOS
+          ================================================= */}
 
           <Card>
             <CardContent className="p-4">
@@ -730,9 +780,7 @@ export function ServiceCart({
                 ))}
               </div>
 
-              {/* =========================================
-                  RESUMO FINANCEIRO
-              ========================================= */}
+              {/* RESUMO */}
 
               <div className="mt-5 space-y-2 border-t pt-4">
                 <div className="flex justify-between text-sm">
@@ -760,9 +808,9 @@ export function ServiceCart({
             </CardContent>
           </Card>
 
-          {/* =============================================
-              SELEÇÃO DE DATA
-          ============================================= */}
+          {/* =================================================
+              DATA
+          ================================================= */}
 
           <Card>
             <CardContent className="p-4">
@@ -831,9 +879,9 @@ export function ServiceCart({
             </CardContent>
           </Card>
 
-          {/* =============================================
+          {/* =================================================
               HORÁRIOS
-          ============================================= */}
+          ================================================= */}
 
           {selectedDate && (
             <Card>
@@ -889,9 +937,9 @@ export function ServiceCart({
                   </div>
                 )}
 
-                {/* =======================================
-                    AVISO SOBRE HORÁRIO FIXO
-                ======================================= */}
+                {/* =================================================
+                    AVISO SOBRE HORÁRIOS FIXOS
+                ================================================= */}
 
                 {!loadingAvailability && fixedSchedules.length > 0 && (
                   <div className="mt-4 rounded-lg border bg-muted/50 p-3">
@@ -905,9 +953,9 @@ export function ServiceCart({
             </Card>
           )}
 
-          {/* =============================================
+          {/* =================================================
               RESUMO FINAL
-          ============================================= */}
+          ================================================= */}
 
           {selectedDate && selectedTime && (
             <Card>
@@ -957,9 +1005,9 @@ export function ServiceCart({
             </Card>
           )}
 
-          {/* =============================================
-              BOTÃO CONFIRMAR
-          ============================================= */}
+          {/* =================================================
+              CONFIRMAR
+          ================================================= */}
 
           <Button
             type="button"
@@ -996,9 +1044,9 @@ export function ServiceCart({
             )}
           </Button>
 
-          {/* =============================================
-              LIMPAR CARRINHO
-          ============================================= */}
+          {/* =================================================
+              LIMPAR
+          ================================================= */}
 
           <Button
             type="button"

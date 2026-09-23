@@ -87,6 +87,8 @@ model Barbershop {
 
   fixedSchedules FixedSchedule[]
 
+  fixedScheduleExceptions FixedScheduleException[]
+
   businessDays      BusinessDay[]
   businessTimeSlots BusinessTimeSlot[]
 
@@ -251,7 +253,27 @@ model FixedSchedule {
 
   @@unique([barbershopId, dayOfWeek, time])
 }
+// =====================================================
+// EXCEÇÕES DE CLIENTES FIXOS
+// =====================================================
+//
+// Permite liberar um horário fixo somente em uma data
+// específica.
+//
 
+model FixedScheduleException {
+  id           String   @id @default(uuid())
+  barbershopId String
+  date         DateTime @db.Date
+  time         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
+
+  @@unique([barbershopId, date, time])
+  @@index([barbershopId, date])
+}
 // =====================================================
 // FIADO / DÍVIDAS
 // =====================================================
