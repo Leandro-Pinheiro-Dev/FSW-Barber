@@ -45,6 +45,11 @@ import {
 
 import { calculateBookingDiscount } from "@/app/utils/booking-discount";
 
+import {
+  getPricedBookingServices,
+  isHaircutService,
+} from "@/app/utils/booking-pricing";
+
 // =====================================================
 // TIPOS
 // =====================================================
@@ -143,7 +148,7 @@ export function ServiceCartProvider({ children }: ServiceCartProviderProps) {
   );
 
   // ---------------------------------------------------
-  // TOTAL
+  // TOTAL NORMAL DO CARRINHO
   // ---------------------------------------------------
 
   const total = useMemo(() => {
@@ -213,6 +218,7 @@ interface ServiceCartProps {
   // Ele NÃO é colocado automaticamente no carrinho.
   // Serve apenas para manter compatibilidade com
   // a chamada existente do componente.
+
   initialService?: Service | null;
 }
 
@@ -224,7 +230,7 @@ export function ServiceCart({
   barbershopId,
   barbershopName,
 }: ServiceCartProps) {
-  const { services, addService, removeService, clearCart } = useServiceCart();
+  const { services, removeService, clearCart } = useServiceCart();
 
   // ===================================================
   // ESTADOS
@@ -245,6 +251,17 @@ export function ServiceCart({
   const [creatingBooking, setCreatingBooking] = useState(false);
 
   // ===================================================
+  // CORTE INFANTIL
+  // ===================================================
+
+  // Estado do checkbox.
+  //
+  // IMPORTANTE:
+  // Este estado sozinho NÃO determina o preço.
+  // O preço efetivo usa activeChildPricing abaixo.
+  const [isChild, setIsChild] = useState(false);
+
+  // ===================================================
   // CONFIGURAÇÃO DA AGENDA
   // ===================================================
 
@@ -255,6 +272,48 @@ export function ServiceCart({
   const [loadingBusinessSchedule, setLoadingBusinessSchedule] = useState(false);
 
   const [businessScheduleLoaded, setBusinessScheduleLoaded] = useState(false);
+
+  // ===================================================
+  // VERIFICAR SE EXISTE CORTE DE CABELO
+  // ===================================================
+
+  const hasHaircut = useMemo(() => {
+    return services.some((service) => isHaircutService(service.name));
+  }, [services]);
+
+  // ===================================================
+  // REGRA EFETIVA DO CORTE INFANTIL
+  // ===================================================
+  //
+  // O corte infantil só pode ser aplicado se:
+  //
+  // 1. O checkbox estiver marcado
+  // 2. O carrinho possuir Corte de Cabelo
+  //
+  // Não usamos useEffect para alterar estado.
+  // ===================================================
+
+  const activeChildPricing = isChild && hasHaircut;
+
+  // ===================================================
+  // SERVIÇOS COM PREÇO CALCULADO
+  // ===================================================
+  //
+  // Exemplo:
+  //
+  // Corte normal:
+  // R$35
+  //
+  // Corte infantil:
+  // R$30
+  //
+  // Barba:
+  // continua R$35
+  // ===================================================
+
+  const pricedServices = useMemo(() => {
+    return getPricedBookingServices(services, activeChildPricing);
+  }, [services, activeChildPricing]);
 
   // ===================================================
   // DATA MÍNIMA
@@ -283,15 +342,26 @@ export function ServiceCart({
   // ===================================================
   // DESCONTO
   // ===================================================
+  //
+  // O desconto é calculado DEPOIS do preço infantil.
+  //
+  // Exemplo:
+  //
+  // Corte infantil = R$30
+  // Barba = R$35
+  // Subtotal = R$65
+  // Combo = -R$10
+  // Total = R$55
+  // ===================================================
 
   const discountResult = useMemo(() => {
     return calculateBookingDiscount(
-      services.map((service) => ({
+      pricedServices.map((service) => ({
         name: service.name,
-        price: Number(service.price),
+        price: service.price,
       })),
     );
-  }, [services]);
+  }, [pricedServices]);
 
   // ===================================================
   // FORMATAR DATA PARA O SERVIDOR
@@ -461,13 +531,8 @@ export function ServiceCart({
     try {
       setLoadingAvailability(true);
 
-      // IMPORTANTE:
-      //
-      // Usamos "date" diretamente.
-      //
-      // Não usamos selectedDate aqui porque setSelectedDate()
-      // é assíncrono e selectedDate ainda poderia conter
-      // a data anterior.
+      // Não usamos selectedDate aqui porque
+      // setSelectedDate() é assíncrono.
 
       const dateString = formatDateForServer(date);
 
@@ -525,15 +590,6 @@ export function ServiceCart({
 
     // -------------------------------------------------
     // 2. HORÁRIO FIXO
-    //
-    // IMPORTANTE:
-    //
-    // getFixedSchedules() agora já remove da resposta
-    // os horários fixos que foram liberados pelo barbeiro
-    // naquela data.
-    //
-    // Portanto, se o horário estiver aqui, ele realmente
-    // continua bloqueado.
     // -------------------------------------------------
 
     const fixedScheduleExists = fixedSchedules.some(
@@ -618,6 +674,14 @@ export function ServiceCart({
       // ------------------------------------------------
       // CRIAR AGENDAMENTO
       // ------------------------------------------------
+      //
+      // Enviamos activeChildPricing,
+      // e não isChild diretamente.
+      //
+      // Dessa forma, se o usuário tiver marcado
+      // infantil mas remover o Corte de Cabelo,
+      // o servidor receberá false.
+      // ------------------------------------------------
 
       const result = await createBooking({
         serviceIds: services.map((service) => service.id),
@@ -625,6 +689,8 @@ export function ServiceCart({
         date,
 
         time: selectedTime,
+
+        isChild: activeChildPricing,
       });
 
       // ------------------------------------------------
@@ -635,7 +701,9 @@ export function ServiceCart({
 
       if (result.discount > 0 && result.discountDescription) {
         toast.success(
-          `${result.discountDescription}: desconto de R$ ${result.discount.toFixed(2)}`,
+          `${result.discountDescription}: desconto de R$ ${result.discount.toFixed(
+            2,
+          )}`,
         );
       }
 
@@ -644,6 +712,8 @@ export function ServiceCart({
       // ------------------------------------------------
 
       clearCart();
+
+      setIsChild(false);
 
       setSelectedDate(undefined);
 
@@ -747,18 +817,18 @@ export function ServiceCart({
               </div>
 
               <div className="space-y-3">
-                {services.map((service) => (
+                {pricedServices.map((service) => (
                   <div
                     key={service.id}
                     className="
-                      flex
-                      items-center
-                      justify-between
-                      gap-3
-                      rounded-lg
-                      border
-                      p-3
-                    "
+                        flex
+                        items-center
+                        justify-between
+                        gap-3
+                        rounded-lg
+                        border
+                        p-3
+                      "
                   >
                     <div className="min-w-0">
                       <p className="truncate font-medium">{service.name}</p>
@@ -780,7 +850,50 @@ export function ServiceCart({
                 ))}
               </div>
 
-              {/* RESUMO */}
+              {/* =================================================
+                  CORTE INFANTIL
+              ================================================= */}
+
+              {hasHaircut && (
+                <div className="mt-4 rounded-lg border bg-muted/30 p-4">
+                  <label
+                    htmlFor="child-cut"
+                    className="
+                      flex
+                      cursor-pointer
+                      items-center
+                      gap-3
+                    "
+                  >
+                    <input
+                      id="child-cut"
+                      type="checkbox"
+                      checked={isChild}
+                      onChange={(event) => setIsChild(event.target.checked)}
+                      disabled={creatingBooking}
+                      className="
+                        h-4
+                        w-4
+                        cursor-pointer
+                        rounded
+                        border-gray-300
+                      "
+                    />
+
+                    <div>
+                      <p className="font-medium">Corte infantil</p>
+
+                      <p className="text-sm text-muted-foreground">
+                        Corte de Cabelo por R$30,00
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              )}
+
+              {/* =================================================
+                  RESUMO
+              ================================================= */}
 
               <div className="mt-5 space-y-2 border-t pt-4">
                 <div className="flex justify-between text-sm">
@@ -788,6 +901,16 @@ export function ServiceCart({
 
                   <span>R$ {discountResult.subtotal.toFixed(2)}</span>
                 </div>
+
+                {activeChildPricing && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      Corte infantil
+                    </span>
+
+                    <span>R$ 30,00</span>
+                  </div>
+                )}
 
                 {discountResult.discount > 0 && (
                   <div className="flex justify-between text-sm text-green-600">
@@ -987,9 +1110,19 @@ export function ServiceCart({
                     <p className="text-sm text-muted-foreground">Serviços</p>
 
                     <p className="font-medium">
-                      {services.map((service) => service.name).join(", ")}
+                      {pricedServices.map((service) => service.name).join(", ")}
                     </p>
                   </div>
+
+                  {activeChildPricing && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">
+                        Tipo de corte
+                      </p>
+
+                      <p className="font-medium">Infantil — R$30,00</p>
+                    </div>
+                  )}
 
                   <div className="border-t pt-3">
                     <div className="flex items-center justify-between">
@@ -1053,7 +1186,19 @@ export function ServiceCart({
             variant="ghost"
             className="w-full"
             disabled={creatingBooking}
-            onClick={clearCart}
+            onClick={() => {
+              clearCart();
+
+              setIsChild(false);
+
+              setSelectedDate(undefined);
+
+              setSelectedTime(undefined);
+
+              setBookings([]);
+
+              setFixedSchedules([]);
+            }}
           >
             <Minus className="mr-2 h-4 w-4" />
             Limpar serviços

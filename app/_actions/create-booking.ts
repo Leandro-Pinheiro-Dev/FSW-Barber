@@ -1,29 +1,29 @@
 "use server";
 
 import { authOptions } from "@/lib/auth";
-
 import { db } from "@/lib/prisma";
-
 import { calculateBookingDiscount } from "@/app/utils/booking-discount";
-
+import {
+  getPricedBookingServices,
+  isHaircutService,
+} from "@/app/utils/booking-pricing";
 import { validateBusinessSchedule } from "@/lib/business-schedule";
-
 import { sendPushNotification } from "@/lib/push";
-
 import { getServerSession } from "next-auth";
-
 import { revalidatePath } from "next/cache";
 
 interface CreateBookingParams {
   serviceIds: string[];
   date: string;
   time: string;
+  isChild?: boolean;
 }
 
 export const createBooking = async ({
   serviceIds,
   date,
   time,
+  isChild = false,
 }: CreateBookingParams) => {
   // =====================================================
   // 1. VERIFICAR AUTENTICAÇÃO
@@ -127,7 +127,25 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 8. VALIDAR AGENDA DA BARBEARIA
+  // 8. VALIDAR REGRA DE CORTE INFANTIL
+  // =====================================================
+
+  // Se o cliente informou que é criança, precisamos garantir
+  // que realmente existe Corte de Cabelo no agendamento.
+  //
+  // Isso evita que alguém tente enviar isChild=true para
+  // Barba, Pézinho ou Sobrancelha e manipular o preço.
+
+  const hasHaircut = services.some((service) => isHaircutService(service.name));
+
+  if (isChild && !hasHaircut) {
+    throw new Error(
+      "O preço infantil só pode ser aplicado ao Corte de Cabelo.",
+    );
+  }
+
+  // =====================================================
+  // 9. VALIDAR AGENDA DA BARBEARIA
   // =====================================================
 
   // A configuração vem diretamente do banco.
@@ -145,7 +163,7 @@ export const createBooking = async ({
   });
 
   // =====================================================
-  // 9. DEFINIR O USUÁRIO DO AGENDAMENTO
+  // 10. DEFINIR O USUÁRIO DO AGENDAMENTO
   // =====================================================
 
   // Cliente cria o próprio agendamento.
@@ -153,30 +171,63 @@ export const createBooking = async ({
   const bookingUserId = session.user.id;
 
   // =====================================================
-  // 10. CALCULAR DESCONTO NO SERVIDOR
+  // 11. CALCULAR PREÇOS DO AGENDAMENTO
   // =====================================================
 
-  // O desconto é calculado novamente no servidor.
+  // O preço normal do Corte de Cabelo é R$35.
   //
-  // Não confiamos nos valores enviados pelo navegador.
+  // Quando isChild === true:
+  //
+  // Corte de Cabelo = R$30
+  //
+  // Os demais serviços continuam com seus preços normais.
+  //
+  // IMPORTANTE:
+  // Esse cálculo acontece no servidor.
+  //
+  // Portanto, o navegador não consegue simplesmente
+  // enviar um preço diferente.
 
-  const discountResult = calculateBookingDiscount(
+  const pricedServices = getPricedBookingServices(
     services.map((service) => ({
+      id: service.id,
       name: service.name,
       price: Number(service.price),
+    })),
+    isChild,
+  );
+
+  // =====================================================
+  // 12. CALCULAR DESCONTO DOS COMBOS
+  // =====================================================
+
+  // O desconto é aplicado DEPOIS do preço infantil.
+
+  // Exemplo:
+  //
+  // Corte infantil + Barba
+  //
+  // R$30 + R$35 = R$65
+  //
+  // Combo Corte + Barba = -R$10
+  //
+  // Total = R$55
+
+  const discountResult = calculateBookingDiscount(
+    pricedServices.map((service) => ({
+      name: service.name,
+      price: service.price,
     })),
   );
 
   // =====================================================
-  // 11. VERIFICAR HORÁRIO FIXO
+  // 13. VERIFICAR HORÁRIO FIXO
   // =====================================================
 
-  //
   // FixedSchedule é a regra semanal.
   //
   // FixedScheduleException é uma exceção para uma data
   // específica, permitindo liberar aquele horário.
-  //
 
   const fixedSchedule = await db.fixedSchedule.findFirst({
     where: {
@@ -204,7 +255,7 @@ export const createBooking = async ({
 
     // ===================================================
     // SE NÃO EXISTIR EXCEÇÃO:
-    // HORÁRIO CONTINUA RESERVADO PARA O FIXO
+    // HORÁRIO CONTINUA RESERVADO PARA O CLIENTE FIXO
     // ===================================================
 
     if (!fixedScheduleException) {
@@ -220,7 +271,7 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 12. CRIAR DATA COMPLETA DO AGENDAMENTO
+  // 14. CRIAR DATA COMPLETA DO AGENDAMENTO
   // =====================================================
 
   // O horário informado é tratado como horário de São Paulo.
@@ -232,7 +283,7 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 13. VERIFICAR SE O HORÁRIO JÁ ESTÁ OCUPADO
+  // 15. VERIFICAR SE O HORÁRIO JÁ ESTÁ OCUPADO
   // =====================================================
 
   const slotStart = new Date(bookingDate);
@@ -260,7 +311,7 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 14. CRIAR O AGENDAMENTO
+  // 16. CRIAR O AGENDAMENTO
   // =====================================================
 
   const booking = await db.booking.create({
@@ -288,11 +339,20 @@ export const createBooking = async ({
       // =================================================
 
       bookingItems: {
-        create: services.map((service) => ({
+        create: pricedServices.map((service) => ({
           serviceId: service.id,
 
-          // Guarda o preço daquele serviço no momento
+          // Guarda o preço REAL cobrado no momento
           // em que o agendamento foi criado.
+          //
+          // Corte normal:
+          // R$35
+          //
+          // Corte infantil:
+          // R$30
+          //
+          // Isso mantém o histórico financeiro correto.
+
           price: service.price,
         })),
       },
@@ -308,7 +368,7 @@ export const createBooking = async ({
   });
 
   // =====================================================
-  // 15. ENVIAR PUSH PARA O BARBEIRO
+  // 17. ENVIAR PUSH PARA O BARBEIRO
   // =====================================================
 
   // IMPORTANTE:
@@ -320,10 +380,12 @@ export const createBooking = async ({
 
   try {
     // Buscar os usuários que possuem perfil de barbeiro.
+
     const barbers = await db.user.findMany({
       where: {
         role: "BARBER",
       },
+
       select: {
         id: true,
         pushSubscriptions: true,
@@ -359,7 +421,9 @@ export const createBooking = async ({
         try {
           await sendPushNotification(subscription, {
             title: "Novo agendamento ✂️",
+
             body: `${clientName} agendou ${servicesText} para ${formattedDate} às ${time}.`,
+
             url: "/barbeiro/dashboard",
           });
 
@@ -371,7 +435,7 @@ export const createBooking = async ({
           );
 
           // ===============================================
-          // REMOVER INSCRIÇÃO EXPIRADA
+          // IDENTIFICAR STATUS DA FALHA
           // ===============================================
 
           const statusCode =
@@ -382,8 +446,13 @@ export const createBooking = async ({
               ? error.statusCode
               : undefined;
 
+          // ===============================================
+          // REMOVER INSCRIÇÃO EXPIRADA
+          // ===============================================
+
           // 404 ou 410 normalmente significa que
           // a inscrição daquele dispositivo expirou.
+
           if (statusCode === 404 || statusCode === 410) {
             try {
               await db.pushSubscription.delete({
@@ -412,7 +481,7 @@ export const createBooking = async ({
   }
 
   // =====================================================
-  // 16. ATUALIZAR AS PÁGINAS
+  // 18. ATUALIZAR AS PÁGINAS
   // =====================================================
 
   revalidatePath("/");
@@ -420,17 +489,20 @@ export const createBooking = async ({
   revalidatePath("/barbeiro/dashboard");
 
   // =====================================================
-  // 17. RETORNAR RESULTADO
+  // 19. RETORNAR RESULTADO
   // =====================================================
 
   return {
     success: true,
+
     bookingId: booking.id,
 
     // Valores calculados pelo servidor.
+
     subtotal: discountResult.subtotal,
     discount: discountResult.discount,
     total: discountResult.total,
+
     discountDescription: discountResult.description,
   };
 };

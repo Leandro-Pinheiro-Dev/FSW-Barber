@@ -6,6 +6,10 @@ import { toast } from "sonner";
 
 import { createBookingByBarber } from "@/app/_actions/create-booking-by-barber";
 import { calculateBookingDiscount } from "@/app/utils/booking-discount";
+import {
+  getPricedBookingServices,
+  isHaircutService,
+} from "@/app/utils/booking-pricing";
 
 interface User {
   id: string;
@@ -45,17 +49,25 @@ const CreateBookingButton = ({
   const [clientPhone, setClientPhone] = useState("");
 
   // =====================================================
-  // AGORA É UMA LISTA DE SERVIÇOS
+  // SERVIÇOS SELECIONADOS
   // =====================================================
 
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
+
+  // =====================================================
+  // CORTE INFANTIL
+  // =====================================================
+
+  // Quando true, somente o serviço
+  // "Corte de Cabelo" passa de R$35 para R$30.
+  const [isChild, setIsChild] = useState(false);
 
   const [date, setDate] = useState("");
 
   const [time, setTime] = useState("");
 
   // =====================================================
-  // FORMATAR DATA
+  // FORMATAR DATA PARA INPUT
   // =====================================================
 
   const formatDateForInput = (date: Date) => {
@@ -75,8 +87,11 @@ const CreateBookingButton = ({
   const handleOpen = () => {
     setUserId(users[0]?.id ?? "");
 
-    // Seleciona o primeiro serviço inicialmente
+    // Seleciona o primeiro serviço inicialmente.
     setSelectedServiceIds(services[0]?.id ? [services[0].id] : []);
+
+    // Sempre começa como corte normal.
+    setIsChild(false);
 
     if (initialDate) {
       setDate(formatDateForInput(initialDate));
@@ -116,18 +131,76 @@ const CreateBookingButton = ({
   }, [services, selectedServiceIds]);
 
   // =====================================================
+  // VERIFICAR SE TEM CORTE DE CABELO
+  // =====================================================
+
+  const hasHaircut = useMemo(() => {
+    return selectedServices.some((service) => isHaircutService(service.name));
+  }, [selectedServices]);
+
+  // =====================================================
+  // REGRA ATIVA DO CORTE INFANTIL
+  // =====================================================
+
+  // Mesmo que isChild esteja true, a regra só é aplicada
+  // se o Corte de Cabelo estiver selecionado.
+  const activeChildPricing = isChild && hasHaircut;
+
+  // =====================================================
+  // CALCULAR PREÇOS DOS SERVIÇOS
+  // =====================================================
+
+  const pricedSelectedServices = useMemo(() => {
+    return getPricedBookingServices(selectedServices, activeChildPricing);
+  }, [selectedServices, activeChildPricing]);
+
+  // =====================================================
   // CALCULAR DESCONTO
   // =====================================================
 
+  // O desconto do combo é calculado DEPOIS do preço infantil.
+
+  // Exemplo:
+  //
+  // Corte infantil = R$30
+  // Barba = R$35
+  //
+  // Subtotal = R$65
+  //
+  // Combo Corte + Barba = -R$10
+  //
+  // Total = R$55
+
   const discountResult = useMemo(() => {
-    return calculateBookingDiscount(selectedServices);
-  }, [selectedServices]);
+    return calculateBookingDiscount(
+      pricedSelectedServices.map((service) => ({
+        name: service.name,
+        price: service.price,
+      })),
+    );
+  }, [pricedSelectedServices]);
 
   // =====================================================
   // SELECIONAR / DESMARCAR SERVIÇO
   // =====================================================
 
   const handleToggleService = (serviceId: string) => {
+    const selectedService = services.find(
+      (service) => service.id === serviceId,
+    );
+
+    const isCurrentlySelected = selectedServiceIds.includes(serviceId);
+
+    // Se estamos removendo o Corte de Cabelo,
+    // desativamos também o preço infantil.
+    if (
+      selectedService &&
+      isCurrentlySelected &&
+      isHaircutService(selectedService.name)
+    ) {
+      setIsChild(false);
+    }
+
     setSelectedServiceIds((current) => {
       if (current.includes(serviceId)) {
         return current.filter((id) => id !== serviceId);
@@ -193,6 +266,12 @@ const CreateBookingButton = ({
             clientType === "manual"
               ? clientPhone.trim() || undefined
               : undefined,
+
+          // Envia somente se o Corte de Cabelo estiver
+          // realmente selecionado.
+          //
+          // O servidor também recalcula e valida o preço.
+          isChild: activeChildPricing,
         });
 
         // =================================================
@@ -201,11 +280,16 @@ const CreateBookingButton = ({
 
         if (result.discount > 0) {
           toast.success(
-            `Agendamento criado! Desconto de R$ ${result.discount.toFixed(2)} aplicado.`,
+            `Agendamento criado! Desconto de R$ ${result.discount.toFixed(
+              2,
+            )} aplicado.`,
           );
         } else {
           toast.success("Agendamento criado com sucesso.");
         }
+
+        // Limpa a opção infantil para o próximo agendamento.
+        setIsChild(false);
 
         setOpen(false);
 
@@ -390,6 +474,14 @@ const CreateBookingButton = ({
               {services.map((service) => {
                 const selected = selectedServiceIds.includes(service.id);
 
+                const pricedService = pricedSelectedServices.find(
+                  (item) => item.id === service.id,
+                );
+
+                const displayPrice = pricedService
+                  ? pricedService.price
+                  : Number(service.price);
+
                 return (
                   <button
                     key={service.id}
@@ -420,12 +512,35 @@ const CreateBookingButton = ({
                         selected ? "text-black" : "text-green-400"
                       }`}
                     >
-                      R$ {service.price.toFixed(2)}
+                      R$ {displayPrice.toFixed(2)}
                     </span>
                   </button>
                 );
               })}
             </div>
+
+            {/* =================================================
+                CORTE INFANTIL
+            ================================================= */}
+
+            {hasHaircut && (
+              <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-700 bg-zinc-950 p-4 transition hover:border-zinc-500">
+                <input
+                  type="checkbox"
+                  checked={isChild}
+                  onChange={(event) => setIsChild(event.target.checked)}
+                  className="mt-1 h-4 w-4 cursor-pointer accent-white"
+                />
+
+                <div>
+                  <p className="font-medium text-white">Corte infantil</p>
+
+                  <p className="mt-1 text-sm text-zinc-400">
+                    O Corte de Cabelo ficará por R$ 30,00.
+                  </p>
+                </div>
+              </label>
+            )}
           </div>
 
           {/* =================================================
@@ -440,6 +555,14 @@ const CreateBookingButton = ({
 
                   <span>R$ {discountResult.subtotal.toFixed(2)}</span>
                 </div>
+
+                {activeChildPricing && (
+                  <div className="flex justify-between text-sm text-zinc-400">
+                    <span>Corte infantil</span>
+
+                    <span>R$ 30,00</span>
+                  </div>
+                )}
 
                 {discountResult.discount > 0 && (
                   <div className="flex justify-between text-sm text-green-400">
@@ -503,7 +626,10 @@ const CreateBookingButton = ({
           <div className="flex justify-end gap-3">
             <button
               type="button"
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                setIsChild(false);
+                setOpen(false);
+              }}
               disabled={isPending}
               className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 font-medium text-zinc-200 transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
