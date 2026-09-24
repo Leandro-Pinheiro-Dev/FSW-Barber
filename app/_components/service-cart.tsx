@@ -881,7 +881,9 @@ export function ServiceCart({
                     />
 
                     <div>
-                      <p className="font-medium">Corte infantil</p>
+                      <p className="font-medium">
+                        Corte infantil (até 10 anos)
+                      </p>
 
                       <p className="text-sm text-muted-foreground">
                         Corte de Cabelo por R$30,00

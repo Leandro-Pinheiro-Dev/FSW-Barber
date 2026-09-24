@@ -533,7 +533,9 @@ const CreateBookingButton = ({
                 />
 
                 <div>
-                  <p className="font-medium text-white">Corte infantil</p>
+                  <p className="font-medium text-white">
+                    Corte infantil (até 10 anos)
+                  </p>
 
                   <p className="mt-1 text-sm text-zinc-400">
                     O Corte de Cabelo ficará por R$ 30,00.
