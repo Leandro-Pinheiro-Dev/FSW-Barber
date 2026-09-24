@@ -350,30 +350,6 @@ const BarberDashboardPage = async () => {
         </section>
 
         {/* =================================================
-            SERVIÇOS / FIADO RECEBIDOS
-        ================================================= */}
-
-        <section className="mb-8">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 shadow-lg">
-              <p className="text-sm text-zinc-500">Serviços recebidos hoje</p>
-
-              <p className="mt-2 text-2xl font-bold text-white">
-                R$ {dashboardSummary.dailyServiceRevenue.toFixed(2)}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 shadow-lg">
-              <p className="text-sm text-zinc-500">Fiados recebidos hoje</p>
-
-              <p className="mt-2 text-2xl font-bold text-white">
-                R$ {dashboardSummary.dailyDebtRevenue.toFixed(2)}
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* =================================================
             CARDS
         ================================================= */}
 
