@@ -248,17 +248,6 @@ const BarberDashboardPage = async () => {
   }));
 
   // =====================================================
-  // MÊS ATUAL
-  // =====================================================
-
-  const now = new Date();
-
-  const currentMonth = now.toLocaleDateString("pt-BR", {
-    month: "long",
-    year: "numeric",
-  });
-
-  // =====================================================
   // RENDER
   // =====================================================
 
@@ -304,7 +293,7 @@ const BarberDashboardPage = async () => {
             </p>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-green-900/50 bg-linear-to-br from-green-950/40 to-zinc-900 p-6 shadow-lg">
               <p className="text-sm font-medium text-zinc-400">Recebido hoje</p>
 
@@ -314,20 +303,6 @@ const BarberDashboardPage = async () => {
 
               <p className="mt-4 text-xs text-zinc-500">
                 Serviços + pagamentos de fiado
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-blue-900/50 bg-linear-to-br from-blue-950/40 to-zinc-900 p-6 shadow-lg">
-              <p className="text-sm font-medium capitalize text-zinc-400">
-                {currentMonth}
-              </p>
-
-              <p className="mt-3 text-3xl font-bold text-blue-400">
-                R$ {dashboardSummary.monthlyRevenue.toFixed(2)}
-              </p>
-
-              <p className="mt-4 text-xs text-zinc-500">
-                Total recebido no mês
               </p>
             </div>
 
