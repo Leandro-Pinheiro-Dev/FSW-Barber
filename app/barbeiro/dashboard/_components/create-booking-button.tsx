@@ -558,7 +558,7 @@ const CreateBookingButton = ({
 
                 {activeChildPricing && (
                   <div className="flex justify-between text-sm text-zinc-400">
-                    <span>Corte infantil</span>
+                    <span>Corte infantil (até 10 anos)</span>
 
                     <span>R$ 30,00</span>
                   </div>

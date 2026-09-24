@@ -905,7 +905,7 @@ export function ServiceCart({
                 {activeChildPricing && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
-                      Corte infantil
+                      Corte infantil (até 10 anos)
                     </span>
 
                     <span>R$ 30,00</span>
