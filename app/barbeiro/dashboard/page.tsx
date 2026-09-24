@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 
+import MonthlyHistory from "./_components/monthly-history";
 import EditServiceButton from "./_components/edit-service-button";
 import EditBookingButton from "./_components/edit-booking-button";
 import DeleteBookingButton from "./_components/delete-booking-button";
@@ -382,6 +383,11 @@ const BarberDashboardPage = async () => {
             </div>
           </div>
         </section>
+        {/* =================================================
+                  HISTÓRICO FINANCEIRO MENSAL
+             ================================================= */}
+
+        <MonthlyHistory />
 
         {/* =================================================
             SERVIÇOS E PREÇOS
@@ -417,7 +423,6 @@ const BarberDashboardPage = async () => {
             ))}
           </div>
         </section>
-
         {/* =================================================
             CONFIGURAÇÃO DA AGENDA
         ================================================= */}
