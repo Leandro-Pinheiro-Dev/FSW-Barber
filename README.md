@@ -1411,14 +1411,10 @@ Este projeto demonstra conhecimentos em:
 
 
 ```
+ 📌 RESUMO
 
----
+O SpaçoVip Barbearia reúne em um único projeto conceitos de desenvolvimento Web Full Stack:
 
-# 📌 Resumo
-
-O **SpaçoVip Barbearia** reúne em um único projeto conceitos de desenvolvimento Web Full Stack:
-
-```text
                  SPAÇOVIP
                     │
         ┌───────────┴───────────┐
