@@ -952,7 +952,7 @@ export function ServiceCart({
 
               <div className="flex justify-center">
                 {loadingBusinessSchedule ? (
-                  <div className="flex h-[330px] items-center justify-center">
+                  <div className="flex h-82.5 items-center justify-center">
                     <div
                       className="
                         h-6
