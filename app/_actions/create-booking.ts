@@ -74,16 +74,57 @@ export const createBooking = async ({
   ) {
     throw new Error("Horário inválido.");
   }
-
   // =====================================================
-  // 5. DESCOBRIR O DIA DA SEMANA
+  // 5. VALIDAR MÊS DO AGENDAMENTO
+  // =====================================================
+  //
+  // O cliente só pode criar agendamentos dentro
+  // do mês atual.
+  //
+  // Esta validação acontece no servidor para impedir
+  // que alguém tente burlar a regra pelo navegador.
+  //
+  // Usamos o horário de São Paulo para evitar problemas
+  // de fuso horário.
+  //
+  // =====================================================
+
+  const now = new Date();
+
+  const saoPauloParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+
+  const currentYear = Number(
+    saoPauloParts.find((part) => part.type === "year")?.value,
+  );
+
+  const currentMonth = Number(
+    saoPauloParts.find((part) => part.type === "month")?.value,
+  );
+
+  const [year, month, day] = date.split("-").map(Number);
+
+  if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
+    throw new Error("Data inválida.");
+  }
+
+  if (year !== currentYear || month !== currentMonth) {
+    throw new Error(
+      "Os agendamentos só podem ser realizados dentro do mês atual.",
+    );
+  }
+  // =====================================================
+  // =====================================================
+  // 6. DESCOBRIR O DIA DA SEMANA
   // =====================================================
 
   // Usamos UTC ao meio-dia apenas para descobrir
   // corretamente o dia da semana da data escolhida,
   // sem sofrer alteração por fuso horário.
-
-  const [year, month, day] = date.split("-").map(Number);
 
   const dateForDayOfWeek = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
 

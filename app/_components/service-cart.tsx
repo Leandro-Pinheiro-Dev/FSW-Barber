@@ -330,13 +330,18 @@ export function ServiceCart({
   // ===================================================
   // DATA MÁXIMA
   // ===================================================
+  //
+  // O cliente só pode agendar dentro do mês atual.
+  //
+  // Exemplo:
+  // Setembro/2026 -> último dia permitido: 30/09/2026
+  // Outubro/2026 -> ficará disponível somente quando
+  // chegar o dia 01/10/2026.
+  //
+  // ===================================================
 
   const maxDate = useMemo(() => {
-    const date = new Date(today);
-
-    date.setDate(date.getDate() + 60);
-
-    return date;
+    return new Date(today.getFullYear(), today.getMonth() + 1, 0);
   }, [today]);
 
   // ===================================================
@@ -981,6 +986,7 @@ export function ServiceCart({
                       return !isBusinessDayActive(date);
                     }}
                     locale={ptBR}
+                    disableNavigation
                     className="rounded-md border"
                   />
                 )}
