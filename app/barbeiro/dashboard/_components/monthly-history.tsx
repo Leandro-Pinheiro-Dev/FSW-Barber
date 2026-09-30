@@ -118,7 +118,7 @@ const MonthlyHistory = () => {
             <ChevronLeft className="h-5 w-5" />
           </button>
 
-          <span className="min-w-[180px] text-center text-sm font-semibold capitalize text-white">
+          <span className="min-w-45' text-center text-sm font-semibold capitalize text-white">
             {formatMonth(year, month)}
           </span>
 

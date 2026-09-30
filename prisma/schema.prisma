@@ -51,12 +51,12 @@ model User {
   role               UserRole  @default(CUSTOMER)
   needsRoleSelection Boolean   @default(true)
 
-  bookings Booking[]
-  debts    CustomerDebt[]
-  reviews  Review[]
-  accounts Account[]
-  sessions Session[]
-  pushSubscriptions  PushSubscription[]
+  bookings          Booking[]
+  debts             CustomerDebt[]
+  reviews           Review[]
+  accounts          Account[]
+  sessions          Session[]
+  pushSubscriptions PushSubscription[]
 
   @@map("users")
 }
@@ -93,7 +93,8 @@ model Barbershop {
   businessDays      BusinessDay[]
   businessTimeSlots BusinessTimeSlot[]
 
-  reviews Review[]
+  reviews        Review[]
+  businessMonths BusinessMonth[]
 }
 
 // =====================================================
@@ -178,6 +179,47 @@ model BusinessTimeSlot {
 }
 
 // =====================================================
+// MESES DISPONÍVEIS PARA AGENDAMENTO
+// =====================================================
+//
+// Controla quais meses podem receber agendamentos.
+//
+// active = true  -> mês liberado
+// active = false -> mês bloqueado
+//
+// A regra de disponibilidade fica:
+//
+// MÊS
+//   ↓
+// DIA DA SEMANA
+//   ↓
+// HORÁRIO
+//
+// Exemplo:
+//
+// Setembro/2026 -> liberado
+// Outubro/2026  -> bloqueado
+//
+// Mesmo que terça-feira esteja aberta e 08:00 esteja
+// ativo, um mês bloqueado não permite agendamento.
+//
+
+model BusinessMonth {
+  id           String   @id @default(uuid())
+  barbershopId String
+  year         Int
+  month        Int
+  active       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
+
+  @@unique([barbershopId, year, month])
+  @@index([barbershopId])
+}
+
+// =====================================================
 // AGENDAMENTOS
 // =====================================================
 
@@ -254,6 +296,7 @@ model FixedSchedule {
 
   @@unique([barbershopId, dayOfWeek, time])
 }
+
 // =====================================================
 // EXCEÇÕES DE CLIENTES FIXOS
 // =====================================================
@@ -275,6 +318,7 @@ model FixedScheduleException {
   @@unique([barbershopId, date, time])
   @@index([barbershopId, date])
 }
+
 // =====================================================
 // FIADO / DÍVIDAS
 // =====================================================
@@ -343,6 +387,7 @@ model Review {
 
   @@unique([userId, barbershopId])
 }
+
 // =====================================================
 // PUSH NOTIFICATIONS
 // =====================================================
@@ -360,6 +405,7 @@ model PushSubscription {
 
   @@index([userId])
 }
+
 // =====================================================
 // ENUMS
 // =====================================================

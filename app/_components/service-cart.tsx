@@ -40,6 +40,7 @@ import { getFixedSchedules } from "@/app/_actions/get-fixed-schedules";
 
 import {
   getBusinessSchedule,
+  getBusinessMonths,
   type BusinessScheduleDay,
 } from "@/app/barbeiro/dashboard/_actions/business-schedule";
 
@@ -58,6 +59,12 @@ interface Service {
   id: string;
   name: string;
   price: number;
+}
+
+interface BusinessMonth {
+  year: number;
+  month: number;
+  active: boolean;
 }
 
 // =====================================================
@@ -91,18 +98,7 @@ interface ServiceCartProviderProps {
 }
 
 export function ServiceCartProvider({ children }: ServiceCartProviderProps) {
-  // ---------------------------------------------------
-  // O CARRINHO COMEÇA VAZIO
-  //
-  // O serviço da busca rápida NÃO é adicionado
-  // automaticamente.
-  // ---------------------------------------------------
-
   const [services, setServices] = useState<Service[]>([]);
-
-  // ---------------------------------------------------
-  // ADICIONAR SERVIÇO
-  // ---------------------------------------------------
 
   const addService = useCallback((service: Service) => {
     setServices((currentServices) => {
@@ -118,27 +114,15 @@ export function ServiceCartProvider({ children }: ServiceCartProviderProps) {
     });
   }, []);
 
-  // ---------------------------------------------------
-  // REMOVER SERVIÇO
-  // ---------------------------------------------------
-
   const removeService = useCallback((serviceId: string) => {
     setServices((currentServices) =>
       currentServices.filter((service) => service.id !== serviceId),
     );
   }, []);
 
-  // ---------------------------------------------------
-  // LIMPAR CARRINHO
-  // ---------------------------------------------------
-
   const clearCart = useCallback(() => {
     setServices([]);
   }, []);
-
-  // ---------------------------------------------------
-  // VERIFICAR SE ESTÁ NO CARRINHO
-  // ---------------------------------------------------
 
   const isInCart = useCallback(
     (serviceId: string) => {
@@ -146,10 +130,6 @@ export function ServiceCartProvider({ children }: ServiceCartProviderProps) {
     },
     [services],
   );
-
-  // ---------------------------------------------------
-  // TOTAL NORMAL DO CARRINHO
-  // ---------------------------------------------------
 
   const total = useMemo(() => {
     return services.reduce((sum, service) => sum + Number(service.price), 0);
@@ -213,12 +193,6 @@ interface ServiceCartProps {
 
   barbershopName: string;
 
-  // Serviço vindo da busca rápida.
-  //
-  // Ele NÃO é colocado automaticamente no carrinho.
-  // Serve apenas para manter compatibilidade com
-  // a chamada existente do componente.
-
   initialService?: Service | null;
 }
 
@@ -254,11 +228,6 @@ export function ServiceCart({
   // CORTE INFANTIL
   // ===================================================
 
-  // Estado do checkbox.
-  //
-  // IMPORTANTE:
-  // Este estado sozinho NÃO determina o preço.
-  // O preço efetivo usa activeChildPricing abaixo.
   const [isChild, setIsChild] = useState(false);
 
   // ===================================================
@@ -269,12 +238,27 @@ export function ServiceCart({
     BusinessScheduleDay[]
   >([]);
 
+  const [businessMonths, setBusinessMonths] = useState<BusinessMonth[]>([]);
+
   const [loadingBusinessSchedule, setLoadingBusinessSchedule] = useState(false);
 
   const [businessScheduleLoaded, setBusinessScheduleLoaded] = useState(false);
 
   // ===================================================
-  // VERIFICAR SE EXISTE CORTE DE CABELO
+  // MÊS EXIBIDO NO CALENDÁRIO
+  // ===================================================
+
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => {
+    const date = new Date();
+
+    date.setDate(1);
+    date.setHours(0, 0, 0, 0);
+
+    return date;
+  });
+
+  // ===================================================
+  // VERIFICAR CORTE DE CABELO
   // ===================================================
 
   const hasHaircut = useMemo(() => {
@@ -284,31 +268,11 @@ export function ServiceCart({
   // ===================================================
   // REGRA EFETIVA DO CORTE INFANTIL
   // ===================================================
-  //
-  // O corte infantil só pode ser aplicado se:
-  //
-  // 1. O checkbox estiver marcado
-  // 2. O carrinho possuir Corte de Cabelo
-  //
-  // Não usamos useEffect para alterar estado.
-  // ===================================================
 
   const activeChildPricing = isChild && hasHaircut;
 
   // ===================================================
   // SERVIÇOS COM PREÇO CALCULADO
-  // ===================================================
-  //
-  // Exemplo:
-  //
-  // Corte normal:
-  // R$35
-  //
-  // Corte infantil:
-  // R$30
-  //
-  // Barba:
-  // continua R$35
   // ===================================================
 
   const pricedServices = useMemo(() => {
@@ -316,7 +280,7 @@ export function ServiceCart({
   }, [services, activeChildPricing]);
 
   // ===================================================
-  // DATA MÍNIMA
+  // DATA DE HOJE
   // ===================================================
 
   const today = useMemo(() => {
@@ -328,35 +292,7 @@ export function ServiceCart({
   }, []);
 
   // ===================================================
-  // DATA MÁXIMA
-  // ===================================================
-  //
-  // O cliente só pode agendar dentro do mês atual.
-  //
-  // Exemplo:
-  // Setembro/2026 -> último dia permitido: 30/09/2026
-  // Outubro/2026 -> ficará disponível somente quando
-  // chegar o dia 01/10/2026.
-  //
-  // ===================================================
-
-  const maxDate = useMemo(() => {
-    return new Date(today.getFullYear(), today.getMonth() + 1, 0);
-  }, [today]);
-
-  // ===================================================
   // DESCONTO
-  // ===================================================
-  //
-  // O desconto é calculado DEPOIS do preço infantil.
-  //
-  // Exemplo:
-  //
-  // Corte infantil = R$30
-  // Barba = R$35
-  // Subtotal = R$65
-  // Combo = -R$10
-  // Total = R$55
   // ===================================================
 
   const discountResult = useMemo(() => {
@@ -370,10 +306,6 @@ export function ServiceCart({
 
   // ===================================================
   // FORMATAR DATA PARA O SERVIDOR
-  //
-  // IMPORTANTE:
-  // Não usamos toISOString() porque isso pode mudar
-  // o dia por causa do fuso horário.
   // ===================================================
 
   const formatDateForServer = useCallback((date: Date) => {
@@ -381,28 +313,149 @@ export function ServiceCart({
   }, []);
 
   // ===================================================
+  // VERIFICAR SE O MÊS ESTÁ CONFIGURADO
+  // ===================================================
+
+  const getBusinessMonth = useCallback(
+    (date: Date) => {
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+
+      return businessMonths.find(
+        (item) => item.year === year && item.month === month,
+      );
+    },
+    [businessMonths],
+  );
+
+  // ===================================================
+  // VERIFICAR SE O MÊS ESTÁ LIBERADO
+  // ===================================================
+
+  const isBusinessMonthActive = useCallback(
+    (date: Date) => {
+      const configuredMonth = getBusinessMonth(date);
+
+      return configuredMonth?.active === true;
+    },
+    [getBusinessMonth],
+  );
+
+  // ===================================================
+  // VERIFICAR SE O MÊS É PASSADO
+  // ===================================================
+
+  const isPastMonth = useCallback(
+    (date: Date) => {
+      const currentYear = today.getFullYear();
+      const currentMonth = today.getMonth();
+
+      const year = date.getFullYear();
+      const month = date.getMonth();
+
+      return (
+        year < currentYear || (year === currentYear && month < currentMonth)
+      );
+    },
+    [today],
+  );
+
+  // ===================================================
+  // VERIFICAR SE O MÊS ESTÁ DENTRO DOS MESES CONFIGURADOS
+  // ===================================================
+
+  const isConfiguredMonth = useCallback(
+    (date: Date) => {
+      return Boolean(getBusinessMonth(date));
+    },
+    [getBusinessMonth],
+  );
+
+  // ===================================================
   // BUSCAR CONFIGURAÇÃO DA AGENDA
   // ===================================================
 
-  const loadBusinessSchedule = async () => {
+  const loadBusinessSchedule = useCallback(async () => {
     try {
       setLoadingBusinessSchedule(true);
+      setBusinessScheduleLoaded(false);
 
-      const result = await getBusinessSchedule();
+      const [scheduleResult, monthsResult] = await Promise.all([
+        getBusinessSchedule(),
+        getBusinessMonths(),
+      ]);
 
-      setBusinessSchedule(result ?? []);
+      const schedule = scheduleResult ?? [];
+      const months = monthsResult ?? [];
+
+      setBusinessSchedule(schedule);
+      setBusinessMonths(months);
 
       setBusinessScheduleLoaded(true);
+
+      // -------------------------------------------------
+      // DEFINIR O PRIMEIRO MÊS DISPONÍVEL
+      // -------------------------------------------------
+
+      const currentMonth = months.find(
+        (item) =>
+          item.year === today.getFullYear() &&
+          item.month === today.getMonth() + 1 &&
+          item.active,
+      );
+
+      if (currentMonth) {
+        setCalendarMonth(
+          new Date(currentMonth.year, currentMonth.month - 1, 1),
+        );
+
+        return;
+      }
+
+      // -------------------------------------------------
+      // SE O MÊS ATUAL ESTIVER BLOQUEADO,
+      // PROCURAR O PRIMEIRO MÊS FUTURO LIBERADO.
+      // -------------------------------------------------
+
+      const firstActiveMonth = [...months]
+        .filter((item) => {
+          const monthDate = new Date(item.year, item.month - 1, 1);
+
+          return item.active && !isPastMonth(monthDate);
+        })
+        .sort((a, b) => a.year - b.year || a.month - b.month)[0];
+
+      if (firstActiveMonth) {
+        setCalendarMonth(
+          new Date(firstActiveMonth.year, firstActiveMonth.month - 1, 1),
+        );
+
+        return;
+      }
+
+      // -------------------------------------------------
+      // CASO NENHUM MÊS ESTEJA LIBERADO,
+      // MANTER NO MÊS ATUAL.
+      // -------------------------------------------------
+
+      const current = new Date();
+
+      current.setDate(1);
+      current.setHours(0, 0, 0, 0);
+
+      setCalendarMonth(current);
     } catch (error) {
       console.error("Erro ao carregar configuração da agenda:", error);
 
+      setBusinessSchedule([]);
+      setBusinessMonths([]);
       setBusinessScheduleLoaded(false);
 
       toast.error("Não foi possível carregar a configuração da agenda.");
     } finally {
       setLoadingBusinessSchedule(false);
     }
-  };
+  }, [today, isPastMonth]);
 
   // ===================================================
   // ABRIR / FECHAR CARRINHO
@@ -428,24 +481,93 @@ export function ServiceCart({
   );
 
   // ===================================================
-  // VERIFICAR SE O DIA ESTÁ ABERTO
+  // VERIFICAR DIA DA SEMANA
   // ===================================================
 
-  const isBusinessDayActive = (date: Date) => {
-    if (!businessScheduleLoaded) {
-      return true;
-    }
+  const isBusinessDayActive = useCallback(
+    (date: Date) => {
+      if (!businessScheduleLoaded) {
+        return false;
+      }
 
-    const dayOfWeek = date.getDay();
+      const dayOfWeek = date.getDay();
 
-    const businessDay = getBusinessDay(dayOfWeek);
+      const businessDay = getBusinessDay(dayOfWeek);
 
-    if (!businessDay) {
+      if (!businessDay) {
+        return false;
+      }
+
+      return businessDay.active;
+    },
+    [businessScheduleLoaded, getBusinessDay],
+  );
+
+  // ===================================================
+  // VERIFICAR SE DATA ESTÁ DISPONÍVEL
+  // ===================================================
+
+  const isDateDisabled = useCallback(
+    (date: Date) => {
+      // -------------------------------------------------
+      // CONFIGURAÇÃO AINDA NÃO CARREGADA
+      // -------------------------------------------------
+
+      if (!businessScheduleLoaded) {
+        return true;
+      }
+
+      // -------------------------------------------------
+      // DATAS ANTERIORES A HOJE
+      // -------------------------------------------------
+
+      if (date < today) {
+        return true;
+      }
+
+      // -------------------------------------------------
+      // MÊS PASSADO
+      // -------------------------------------------------
+
+      if (isPastMonth(date)) {
+        return true;
+      }
+
+      // -------------------------------------------------
+      // MÊS FORA DOS MESES CONFIGURADOS
+      // -------------------------------------------------
+
+      if (!isConfiguredMonth(date)) {
+        return true;
+      }
+
+      // -------------------------------------------------
+      // MÊS BLOQUEADO PELO BARBEIRO
+      // -------------------------------------------------
+
+      if (!isBusinessMonthActive(date)) {
+        return true;
+      }
+
+      // -------------------------------------------------
+      // DIA DA SEMANA FECHADO
+      // -------------------------------------------------
+
+      if (!isBusinessDayActive(date)) {
+        return true;
+      }
+
       return false;
-    }
-
-    return businessDay.active;
-  };
+    },
+    [
+      businessScheduleLoaded,
+      today,
+      isPastMonth,
+      isConfiguredMonth,
+      isBusinessMonthActive,
+      isBusinessDayActive,
+    ],
+  );
 
   // ===================================================
   // HORÁRIOS ATIVOS DO DIA
@@ -456,6 +578,18 @@ export function ServiceCart({
       return [];
     }
 
+    // -------------------------------------------------
+    // MÊS BLOQUEADO
+    // -------------------------------------------------
+
+    if (!isBusinessMonthActive(selectedDate)) {
+      return [];
+    }
+
+    // -------------------------------------------------
+    // DIA DA SEMANA
+    // -------------------------------------------------
+
     const dayOfWeek = selectedDate.getDay();
 
     const businessDay = getBusinessDay(dayOfWeek);
@@ -464,11 +598,69 @@ export function ServiceCart({
       return [];
     }
 
+    // -------------------------------------------------
+    // HORÁRIOS ATIVOS
+    // -------------------------------------------------
+
     return businessDay.timeSlots
       .filter((slot) => slot.active)
       .map((slot) => slot.time)
       .sort();
-  }, [selectedDate, businessScheduleLoaded, getBusinessDay]);
+  }, [
+    selectedDate,
+    businessScheduleLoaded,
+    isBusinessMonthActive,
+    getBusinessDay,
+  ]);
+
+  // ===================================================
+  // MUDAR MÊS DO CALENDÁRIO
+  // ===================================================
+
+  const handleMonthChange = (month: Date) => {
+    const normalizedMonth = new Date(month.getFullYear(), month.getMonth(), 1);
+
+    normalizedMonth.setHours(0, 0, 0, 0);
+
+    setCalendarMonth(normalizedMonth);
+
+    // Limpar seleção ao trocar de mês.
+
+    setSelectedDate(undefined);
+    setSelectedTime(undefined);
+    setBookings([]);
+    setFixedSchedules([]);
+
+    if (!businessScheduleLoaded) {
+      return;
+    }
+
+    // -------------------------------------------------
+    // MÊS PASSADO
+    // -------------------------------------------------
+
+    if (isPastMonth(normalizedMonth)) {
+      return;
+    }
+
+    // -------------------------------------------------
+    // MÊS NÃO CONFIGURADO
+    // -------------------------------------------------
+
+    if (!isConfiguredMonth(normalizedMonth)) {
+      toast.info("Este mês ainda não está disponível para agendamentos.");
+
+      return;
+    }
+
+    // -------------------------------------------------
+    // MÊS BLOQUEADO
+    // -------------------------------------------------
+
+    if (!isBusinessMonthActive(normalizedMonth)) {
+      toast.info("Este mês está bloqueado para novos agendamentos.");
+    }
+  };
 
   // ===================================================
   // SELECIONAR DATA
@@ -488,7 +680,67 @@ export function ServiceCart({
     }
 
     // -------------------------------------------------
-    // VERIFICAR DIA DA SEMANA
+    // CONFIGURAÇÃO DA AGENDA
+    // -------------------------------------------------
+
+    if (!businessScheduleLoaded) {
+      toast.error("A configuração da agenda ainda está carregando.");
+
+      setSelectedDate(undefined);
+
+      return;
+    }
+
+    // -------------------------------------------------
+    // DATA PASSADA
+    // -------------------------------------------------
+
+    if (date < today) {
+      toast.error("Não é possível selecionar uma data passada.");
+
+      setSelectedDate(undefined);
+
+      return;
+    }
+
+    // -------------------------------------------------
+    // MÊS PASSADO
+    // -------------------------------------------------
+
+    if (isPastMonth(date)) {
+      toast.error("Não é possível realizar agendamentos em meses passados.");
+
+      setSelectedDate(undefined);
+
+      return;
+    }
+
+    // -------------------------------------------------
+    // MÊS CONFIGURADO
+    // -------------------------------------------------
+
+    if (!isConfiguredMonth(date)) {
+      toast.error("Este mês ainda não está disponível para agendamentos.");
+
+      setSelectedDate(undefined);
+
+      return;
+    }
+
+    // -------------------------------------------------
+    // MÊS LIBERADO
+    // -------------------------------------------------
+
+    if (!isBusinessMonthActive(date)) {
+      toast.error("Este mês não está liberado para agendamentos.");
+
+      setSelectedDate(undefined);
+
+      return;
+    }
+
+    // -------------------------------------------------
+    // DIA DA SEMANA
     // -------------------------------------------------
 
     const dayOfWeek = date.getDay();
@@ -504,7 +756,7 @@ export function ServiceCart({
     }
 
     // -------------------------------------------------
-    // VERIFICAR SE A BARBEARIA ESTÁ ABERTA
+    // BARBEARIA ABERTA
     // -------------------------------------------------
 
     if (!businessDay.active) {
@@ -516,7 +768,7 @@ export function ServiceCart({
     }
 
     // -------------------------------------------------
-    // VERIFICAR HORÁRIOS ATIVOS
+    // HORÁRIOS ATIVOS
     // -------------------------------------------------
 
     const activeTimes = businessDay.timeSlots.filter((slot) => slot.active);
@@ -535,9 +787,6 @@ export function ServiceCart({
 
     try {
       setLoadingAvailability(true);
-
-      // Não usamos selectedDate aqui porque
-      // setSelectedDate() é assíncrono.
 
       const dateString = formatDateForServer(date);
 
@@ -565,7 +814,7 @@ export function ServiceCart({
   };
 
   // ===================================================
-  // VERIFICAR SE HORÁRIO ESTÁ INDISPONÍVEL
+  // VERIFICAR HORÁRIO INDISPONÍVEL
   // ===================================================
 
   const isTimeUnavailable = (time: string) => {
@@ -574,7 +823,15 @@ export function ServiceCart({
     }
 
     // -------------------------------------------------
-    // 1. VERIFICAR CONFIGURAÇÃO DA AGENDA
+    // MÊS
+    // -------------------------------------------------
+
+    if (!isBusinessMonthActive(selectedDate)) {
+      return true;
+    }
+
+    // -------------------------------------------------
+    // DIA
     // -------------------------------------------------
 
     const dayOfWeek = selectedDate.getDay();
@@ -585,6 +842,10 @@ export function ServiceCart({
       return true;
     }
 
+    // -------------------------------------------------
+    // HORÁRIO CONFIGURADO
+    // -------------------------------------------------
+
     const businessTimeSlot = businessDay.timeSlots.find(
       (slot) => slot.time === time,
     );
@@ -594,7 +855,7 @@ export function ServiceCart({
     }
 
     // -------------------------------------------------
-    // 2. HORÁRIO FIXO
+    // HORÁRIO FIXO
     // -------------------------------------------------
 
     const fixedScheduleExists = fixedSchedules.some(
@@ -606,7 +867,7 @@ export function ServiceCart({
     }
 
     // -------------------------------------------------
-    // 3. AGENDAMENTO NORMAL
+    // AGENDAMENTO NORMAL
     // -------------------------------------------------
 
     const selectedDateString = format(selectedDate, "yyyy-MM-dd");
@@ -629,17 +890,29 @@ export function ServiceCart({
   // ===================================================
 
   const handleCreateBooking = async () => {
+    // -------------------------------------------------
+    // SERVIÇOS
+    // -------------------------------------------------
+
     if (services.length === 0) {
       toast.error("Selecione pelo menos um serviço.");
 
       return;
     }
 
+    // -------------------------------------------------
+    // DATA
+    // -------------------------------------------------
+
     if (!selectedDate) {
       toast.error("Selecione uma data para o agendamento.");
 
       return;
     }
+
+    // -------------------------------------------------
+    // HORÁRIO
+    // -------------------------------------------------
 
     if (!selectedTime) {
       toast.error("Selecione um horário.");
@@ -648,7 +921,17 @@ export function ServiceCart({
     }
 
     // -------------------------------------------------
-    // VERIFICAR DIA
+    // MÊS
+    // -------------------------------------------------
+
+    if (!isBusinessMonthActive(selectedDate)) {
+      toast.error("Este mês não está liberado para agendamentos.");
+
+      return;
+    }
+
+    // -------------------------------------------------
+    // DIA
     // -------------------------------------------------
 
     if (!isBusinessDayActive(selectedDate)) {
@@ -658,7 +941,7 @@ export function ServiceCart({
     }
 
     // -------------------------------------------------
-    // VERIFICAR HORÁRIO NOVAMENTE
+    // HORÁRIO
     // -------------------------------------------------
 
     if (isTimeUnavailable(selectedTime)) {
@@ -670,23 +953,7 @@ export function ServiceCart({
     try {
       setCreatingBooking(true);
 
-      // ------------------------------------------------
-      // DATA NO FORMATO DO SERVIDOR
-      // ------------------------------------------------
-
       const date = formatDateForServer(selectedDate);
-
-      // ------------------------------------------------
-      // CRIAR AGENDAMENTO
-      // ------------------------------------------------
-      //
-      // Enviamos activeChildPricing,
-      // e não isChild diretamente.
-      //
-      // Dessa forma, se o usuário tiver marcado
-      // infantil mas remover o Corte de Cabelo,
-      // o servidor receberá false.
-      // ------------------------------------------------
 
       const result = await createBooking({
         serviceIds: services.map((service) => service.id),
@@ -704,6 +971,10 @@ export function ServiceCart({
 
       toast.success("Agendamento realizado com sucesso!");
 
+      // ------------------------------------------------
+      // MOSTRAR DESCONTO
+      // ------------------------------------------------
+
       if (result.discount > 0 && result.discountDescription) {
         toast.success(
           `${result.discountDescription}: desconto de R$ ${result.discount.toFixed(
@@ -713,7 +984,7 @@ export function ServiceCart({
       }
 
       // ------------------------------------------------
-      // LIMPAR
+      // LIMPAR CARRINHO
       // ------------------------------------------------
 
       clearCart();
@@ -912,7 +1183,7 @@ export function ServiceCart({
                 {activeChildPricing && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
-                      Corte infantil (até 10 anos)
+                      Corte infantil
                     </span>
 
                     <span>R$ 30,00</span>
@@ -968,36 +1239,47 @@ export function ServiceCart({
                 ) : (
                   <Calendar
                     mode="single"
+                    month={calendarMonth}
+                    onMonthChange={handleMonthChange}
                     selected={selectedDate}
                     onSelect={handleSelectDate}
-                    disabled={(date) => {
-                      if (date < today) {
-                        return true;
-                      }
-
-                      if (date > maxDate) {
-                        return true;
-                      }
-
-                      if (!businessScheduleLoaded) {
-                        return true;
-                      }
-
-                      return !isBusinessDayActive(date);
-                    }}
+                    disabled={isDateDisabled}
                     locale={ptBR}
-                    disableNavigation
                     className="rounded-md border"
                   />
                 )}
               </div>
 
               {businessScheduleLoaded && (
-                <p className="mt-3 text-center text-xs text-muted-foreground">
-                  Os dias disponíveis seguem o horário configurado pela
-                  barbearia.
-                </p>
+                <div className="mt-3 space-y-1 text-center text-xs text-muted-foreground">
+                  <p>
+                    Os meses disponíveis seguem a configuração da barbearia.
+                  </p>
+
+                  <p>
+                    Os dias e horários também seguem a agenda configurada pelo
+                    barbeiro.
+                  </p>
+                </div>
               )}
+
+              {businessScheduleLoaded && !isConfiguredMonth(calendarMonth) && (
+                <div className="mt-3 rounded-lg border bg-muted/50 p-3 text-center">
+                  <p className="text-xs text-muted-foreground">
+                    Este mês ainda não está configurado para agendamentos.
+                  </p>
+                </div>
+              )}
+
+              {businessScheduleLoaded &&
+                isConfiguredMonth(calendarMonth) &&
+                !isBusinessMonthActive(calendarMonth) && (
+                  <div className="mt-3 rounded-lg border bg-muted/50 p-3 text-center">
+                    <p className="text-xs text-muted-foreground">
+                      Este mês está bloqueado para novos agendamentos.
+                    </p>
+                  </div>
+                )}
 
               {selectedDate && (
                 <p className="mt-4 text-center text-sm text-muted-foreground">
@@ -1069,7 +1351,7 @@ export function ServiceCart({
                 )}
 
                 {/* =================================================
-                    AVISO SOBRE HORÁRIOS FIXOS
+                    AVISO HORÁRIOS FIXOS
                 ================================================= */}
 
                 {!loadingAvailability && fixedSchedules.length > 0 && (
@@ -1157,7 +1439,10 @@ export function ServiceCart({
               creatingBooking ||
               !selectedDate ||
               !selectedTime ||
-              services.length === 0
+              services.length === 0 ||
+              !businessScheduleLoaded ||
+              !isBusinessMonthActive(selectedDate ?? calendarMonth) ||
+              (selectedDate ? !isBusinessDayActive(selectedDate) : true)
             }
             onClick={handleCreateBooking}
           >
