@@ -30,12 +30,20 @@ import EnablePushNotifications from "@/app/_components/enable-push-notifications
 
 import { getDashboardSummary } from "@/app/_actions/get-dashboard-summary";
 
+// =====================================================
+// ITEM DE SERVIÇO DO AGENDAMENTO
+// =====================================================
+
 type DashboardBookingItem = {
   id: string;
   serviceId: string;
   name: string;
   price: number;
 };
+
+// =====================================================
+// AGENDAMENTO DO DASHBOARD
+// =====================================================
 
 type DashboardBooking = {
   id: string;
@@ -57,11 +65,19 @@ type DashboardBooking = {
   bookingItems: DashboardBookingItem[];
 };
 
+// =====================================================
+// SERVIÇO
+// =====================================================
+
 type DashboardService = {
   id: string;
   name: string;
   price: number;
 };
+
+// =====================================================
+// COMPONENTE
+// =====================================================
 
 const BarberDashboardPage = async () => {
   // =====================================================
@@ -87,18 +103,20 @@ const BarberDashboardPage = async () => {
   // =====================================================
   // BUSCAR AGENDAMENTOS
   // =====================================================
+  //
+  // Somente agendamentos operacionais aparecem aqui:
+  //
+  // PENDING    -> aparece
+  // CONFIRMED  -> aparece
+  // COMPLETED  -> não aparece
+  // CANCELLED  -> não aparece
+  //
+  // Os registros COMPLETED continuam salvos no banco
+  // para histórico, financeiro e avaliações.
+  //
+  // =====================================================
 
   const bookingsData = await db.booking.findMany({
-    // Somente agendamentos operacionais devem aparecer
-    // na agenda do barbeiro.
-    //
-    // PENDING    -> aparece
-    // CONFIRMED  -> aparece
-    // COMPLETED  -> não aparece
-    // CANCELLED  -> não aparece
-    //
-    // Os registros COMPLETED continuam salvos no banco
-    // para histórico, financeiro e avaliações.
     where: {
       status: {
         in: ["PENDING", "CONFIRMED"],
@@ -163,8 +181,8 @@ const BarberDashboardPage = async () => {
     // ===================================================
     // SOMA DOS SERVIÇOS
     //
-    // Esse valor serve como fallback para agendamentos
-    // antigos que ainda não possuem total salvo.
+    // Fallback para agendamentos antigos que ainda
+    // não possuem subtotal salvo.
     // ===================================================
 
     const calculatedSubtotal = bookingItems.reduce(
@@ -174,14 +192,6 @@ const BarberDashboardPage = async () => {
 
     // ===================================================
     // VALORES SALVOS NO BOOKING
-    //
-    // Novos agendamentos devem possuir:
-    //
-    // subtotal = soma dos serviços
-    // discount = desconto do combo
-    // total    = subtotal - discount
-    //
-    // Para agendamentos antigos, usamos fallback.
     // ===================================================
 
     const savedSubtotal = Number(booking.subtotal);
@@ -231,6 +241,53 @@ const BarberDashboardPage = async () => {
       bookingItems,
     };
   });
+
+  // =====================================================
+  // AGRUPAR AGENDAMENTOS POR DIA
+  // =====================================================
+  //
+  // Os agendamentos são separados por data usando
+  // o fuso horário de São Paulo.
+  //
+  // Depois:
+  //
+  // 1. Os dias são ordenados cronologicamente.
+  // 2. Os agendamentos de cada dia são ordenados
+  //    pelo horário.
+  //
+  // =====================================================
+
+  const bookingsByDay = bookings.reduce<Record<string, DashboardBooking[]>>(
+    (groups, booking) => {
+      const dateKey = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Sao_Paulo",
+      }).format(new Date(booking.date));
+
+      if (!groups[dateKey]) {
+        groups[dateKey] = [];
+      }
+
+      groups[dateKey].push(booking);
+
+      return groups;
+    },
+    {},
+  );
+
+  // =====================================================
+  // ORDENAR OS DIAS
+  // =====================================================
+
+  const groupedBookingDays = Object.entries(bookingsByDay)
+    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+    .map(([date, dayBookings]) => ({
+      date,
+
+      bookings: [...dayBookings].sort(
+        (bookingA, bookingB) =>
+          new Date(bookingA.date).getTime() - new Date(bookingB.date).getTime(),
+      ),
+    }));
 
   // =====================================================
   // CLIENTES CADASTRADOS
@@ -463,157 +520,215 @@ const BarberDashboardPage = async () => {
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {bookings.map((booking) => (
-                <div
-                  key={booking.id}
-                  className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 transition hover:border-zinc-700"
-                >
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    {/* =========================================
-                        CLIENTE
-                    ========================================= */}
+            <div className="space-y-8">
+              {groupedBookingDays.map(({ date, bookings: dayBookings }) => {
+                const [year, month, day] = date.split("-").map(Number);
 
-                    <div className="min-w-0 lg:w-44">
-                      <p className="truncate font-semibold text-white">
-                        {booking.clientName ?? "Cliente não identificado"}
-                      </p>
+                // =================================================
+                // DATA LOCAL APENAS PARA EXIBIÇÃO
+                // =================================================
 
-                      <p className="mt-1 truncate text-xs text-zinc-500">
-                        {booking.clientPhone ?? "Telefone não informado"}
-                      </p>
-                    </div>
+                const displayDate = new Date(year, month - 1, day);
 
-                    {/* =========================================
-                        SERVIÇOS + DESCONTO
-                    ========================================= */}
+                const formattedDay = displayDate.toLocaleDateString("pt-BR", {
+                  weekday: "long",
+                });
 
-                    <div className="min-w-0 lg:w-64">
-                      <p className="mb-1 text-xs font-medium uppercase text-zinc-600">
-                        Serviços
-                      </p>
+                const formattedDate = displayDate.toLocaleDateString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                });
 
-                      <div className="space-y-1">
-                        {booking.bookingItems.map(
-                          (item: DashboardBookingItem) => (
-                            <div
-                              key={item.id}
-                              className="flex items-center justify-between gap-2"
-                            >
-                              <p className="truncate font-medium text-white">
-                                {item.name}
-                              </p>
+                return (
+                  <div key={date}>
+                    {/* ===========================================
+                        CABEÇALHO DO DIA
+                    =========================================== */}
 
-                              <span className="shrink-0 text-sm text-zinc-500">
-                                R$ {item.price.toFixed(2)}
-                              </span>
-                            </div>
-                          ),
-                        )}
+                    <div className="mb-4 flex items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-lg">
+                        📅
                       </div>
 
-                      {/* =======================================
-                          MOSTRAR RESUMO FINANCEIRO
-                      ======================================= */}
+                      <div>
+                        <h3 className="text-lg font-bold capitalize text-white">
+                          {formattedDay}
+                        </h3>
 
-                      {booking.bookingItems.length > 1 && (
-                        <div className="mt-3 border-t border-zinc-800 pt-2">
-                          {/* SUBTOTAL */}
+                        <p className="text-sm text-zinc-500">{formattedDate}</p>
+                      </div>
 
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-zinc-500">
-                              Subtotal
-                            </span>
+                      <div className="ml-auto rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs text-zinc-500">
+                        {dayBookings.length}{" "}
+                        {dayBookings.length === 1
+                          ? "agendamento"
+                          : "agendamentos"}
+                      </div>
+                    </div>
 
-                            <span className="text-sm text-zinc-400">
-                              R$ {booking.subtotal.toFixed(2)}
-                            </span>
-                          </div>
+                    {/* ===========================================
+                        AGENDAMENTOS DO DIA
+                    =========================================== */}
 
-                          {/* DESCONTO */}
+                    <div className="space-y-3">
+                      {dayBookings.map((booking) => (
+                        <div
+                          key={booking.id}
+                          className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 transition hover:border-zinc-700"
+                        >
+                          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                            {/* =================================
+                                CLIENTE
+                            ================================= */}
 
-                          {booking.discount > 0 && (
-                            <div className="mt-1 flex items-center justify-between">
-                              <span className="text-xs font-medium text-emerald-400">
-                                Desconto
-                              </span>
+                            <div className="min-w-0 lg:w-44">
+                              <p className="truncate font-semibold text-white">
+                                {booking.clientName ??
+                                  "Cliente não identificado"}
+                              </p>
 
-                              <span className="text-sm font-medium text-emerald-400">
-                                - R$ {booking.discount.toFixed(2)}
-                              </span>
+                              <p className="mt-1 truncate text-xs text-zinc-500">
+                                {booking.clientPhone ??
+                                  "Telefone não informado"}
+                              </p>
                             </div>
-                          )}
 
-                          {/* TOTAL */}
+                            {/* =================================
+                                SERVIÇOS + DESCONTO
+                            ================================= */}
 
-                          <div className="mt-1 flex items-center justify-between">
-                            <span className="text-xs font-semibold text-zinc-300">
-                              Total
-                            </span>
+                            <div className="min-w-0 lg:w-64">
+                              <p className="mb-1 text-xs font-medium uppercase text-zinc-600">
+                                Serviços
+                              </p>
 
-                            <span className="font-bold text-green-400">
-                              R$ {booking.total.toFixed(2)}
-                            </span>
+                              <div className="space-y-1">
+                                {booking.bookingItems.map(
+                                  (item: DashboardBookingItem) => (
+                                    <div
+                                      key={item.id}
+                                      className="flex items-center justify-between gap-2"
+                                    >
+                                      <p className="truncate font-medium text-white">
+                                        {item.name}
+                                      </p>
+
+                                      <span className="shrink-0 text-sm text-zinc-500">
+                                        R$ {item.price.toFixed(2)}
+                                      </span>
+                                    </div>
+                                  ),
+                                )}
+                              </div>
+
+                              {/* ===============================
+                                  RESUMO FINANCEIRO
+                              =============================== */}
+
+                              {booking.bookingItems.length > 1 && (
+                                <div className="mt-3 border-t border-zinc-800 pt-2">
+                                  {/* SUBTOTAL */}
+
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs text-zinc-500">
+                                      Subtotal
+                                    </span>
+
+                                    <span className="text-sm text-zinc-400">
+                                      R$ {booking.subtotal.toFixed(2)}
+                                    </span>
+                                  </div>
+
+                                  {/* DESCONTO */}
+
+                                  {booking.discount > 0 && (
+                                    <div className="mt-1 flex items-center justify-between">
+                                      <span className="text-xs font-medium text-emerald-400">
+                                        Desconto
+                                      </span>
+
+                                      <span className="text-sm font-medium text-emerald-400">
+                                        - R$ {booking.discount.toFixed(2)}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* TOTAL */}
+
+                                  <div className="mt-1 flex items-center justify-between">
+                                    <span className="text-xs font-semibold text-zinc-300">
+                                      Total
+                                    </span>
+
+                                    <span className="font-bold text-green-400">
+                                      R$ {booking.total.toFixed(2)}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* =================================
+                                HORÁRIO
+                            ================================= */}
+
+                            <div className="lg:w-24">
+                              <p className="text-xs font-medium uppercase text-zinc-600">
+                                Horário
+                              </p>
+
+                              <p className="mt-1 text-xl font-bold text-green-400">
+                                {new Date(booking.date).toLocaleTimeString(
+                                  "pt-BR",
+                                  {
+                                    timeZone: "America/Sao_Paulo",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    hour12: false,
+                                  },
+                                )}
+                              </p>
+                            </div>
+
+                            {/* =================================
+                                STATUS
+                            ================================= */}
+
+                            <div>
+                              <BookingStatusButton
+                                bookingId={booking.id}
+                                status={booking.status}
+                              />
+                            </div>
+
+                            {/* =================================
+                                AÇÕES
+                            ================================= */}
+
+                            <div className="flex flex-wrap gap-2">
+                              <EditBookingButton
+                                booking={{
+                                  id: booking.id,
+                                  userId: booking.userId,
+                                  clientName: booking.clientName,
+                                  clientPhone: booking.clientPhone,
+                                  serviceId: booking.serviceId,
+                                  date: booking.date,
+                                }}
+                                users={users}
+                                services={services}
+                              />
+
+                              <DeleteBookingButton bookingId={booking.id} />
+                            </div>
                           </div>
                         </div>
-                      )}
-                    </div>
-
-                    {/* =========================================
-                        DATA / HORA
-                    ========================================= */}
-
-                    <div className="lg:w-32">
-                      <p className="font-medium text-white">
-                        {new Date(booking.date).toLocaleDateString("pt-BR", {
-                          timeZone: "America/Sao_Paulo",
-                        })}
-                      </p>
-
-                      <p className="mt-1 text-sm text-zinc-500">
-                        {new Date(booking.date).toLocaleTimeString("pt-BR", {
-                          timeZone: "America/Sao_Paulo",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          hour12: false,
-                        })}
-                      </p>
-                    </div>
-
-                    {/* =========================================
-                        STATUS
-                    ========================================= */}
-
-                    <div>
-                      <BookingStatusButton
-                        bookingId={booking.id}
-                        status={booking.status}
-                      />
-                    </div>
-
-                    {/* =========================================
-                        AÇÕES
-                    ========================================= */}
-
-                    <div className="flex flex-wrap gap-2">
-                      <EditBookingButton
-                        booking={{
-                          id: booking.id,
-                          userId: booking.userId,
-                          clientName: booking.clientName,
-                          clientPhone: booking.clientPhone,
-                          serviceId: booking.serviceId,
-                          date: booking.date,
-                        }}
-                        users={users}
-                        services={services}
-                      />
-
-                      <DeleteBookingButton bookingId={booking.id} />
+                      ))}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
