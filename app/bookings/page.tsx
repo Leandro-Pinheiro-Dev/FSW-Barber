@@ -22,11 +22,20 @@ const Bookings = async () => {
   }
 
   // =====================================================
-  // AGENDAMENTOS CONFIRMADOS
-  // PENDING + CONFIRMED
+  // MEUS AGENDAMENTOS
+  //
+  // Na tela do cliente mostramos somente:
+  //
+  // PENDING   → aguardando confirmação
+  // CONFIRMED → confirmado pelo barbeiro
+  //
+  // COMPLETED → NÃO aparece nesta tela
+  //
+  // O agendamento continua salvo no banco de dados.
+  // Isso permite manter histórico, financeiro e estatísticas.
   // =====================================================
 
-  const confirmedBookings = await db.booking.findMany({
+  const bookings = await db.booking.findMany({
     where: {
       userId: session.user.id,
       status: {
@@ -58,19 +67,19 @@ const Bookings = async () => {
   });
 
   // =====================================================
-  // FORMATAR AGENDAMENTOS CONFIRMADOS
+  // FORMATAR AGENDAMENTOS
   // =====================================================
 
-  const confirmedBookingsFormatted = confirmedBookings.map((booking) => ({
+  const bookingsFormatted = bookings.map((booking) => ({
     id: booking.id,
 
     date: booking.date,
 
-    // IMPORTANTE:
-    // O status real vem do banco.
+    // Status real salvo no banco.
+    // Nesta tela será PENDING ou CONFIRMED.
     status: booking.status,
 
-    // Valores financeiros OFICIAIS salvos no Booking.
+    // Valores financeiros oficiais salvos no Booking.
     subtotal: Number(booking.subtotal),
     discount: Number(booking.discount),
     total: Number(booking.total),
@@ -86,84 +95,7 @@ const Bookings = async () => {
       },
     },
 
-    // Serviços do agendamento.
-    bookingItems: booking.bookingItems.map((item) => ({
-      id: item.id,
-
-      name: item.service.name,
-
-      price: Number(item.price),
-
-      barbershopName: item.service.barbershop.name,
-
-      barbershopImage: item.service.barbershop.imageUrl,
-    })),
-  }));
-
-  // =====================================================
-  // AGENDAMENTOS FINALIZADOS
-  // COMPLETED
-  // =====================================================
-
-  const concludedBookings = await db.booking.findMany({
-    where: {
-      userId: session.user.id,
-      status: "COMPLETED",
-    },
-
-    include: {
-      bookingItems: {
-        include: {
-          service: {
-            include: {
-              barbershop: true,
-            },
-          },
-        },
-      },
-
-      service: {
-        include: {
-          barbershop: true,
-        },
-      },
-    },
-
-    orderBy: {
-      date: "desc",
-    },
-  });
-
-  // =====================================================
-  // FORMATAR AGENDAMENTOS FINALIZADOS
-  // =====================================================
-
-  const concludedBookingsFormatted = concludedBookings.map((booking) => ({
-    id: booking.id,
-
-    date: booking.date,
-
-    // IMPORTANTE:
-    // Também precisamos enviar o status aqui.
-    status: booking.status,
-
-    // Valores financeiros OFICIAIS salvos no Booking.
-    subtotal: Number(booking.subtotal),
-    discount: Number(booking.discount),
-    total: Number(booking.total),
-
-    service: {
-      id: booking.service.id,
-      name: booking.service.name,
-      price: Number(booking.service.price),
-
-      barbershop: {
-        name: booking.service.barbershop.name,
-        image: booking.service.barbershop.imageUrl,
-      },
-    },
-
-    // Serviços do agendamento.
+    // Serviços que fazem parte do agendamento.
     bookingItems: booking.bookingItems.map((item) => ({
       id: item.id,
 
@@ -189,45 +121,23 @@ const Bookings = async () => {
         <h1 className="mb-6 text-xl font-bold">MEUS AGENDAMENTOS</h1>
 
         {/* =================================================
-            CONFIRMADOS
+            AGENDAMENTOS PENDENTES / CONFIRMADOS
         ================================================= */}
 
         <div>
           <h2 className="mb-3 text-xs font-bold uppercase text-muted-foreground">
-            Confirmados
+            Meus agendamentos
           </h2>
 
-          {confirmedBookingsFormatted.length > 0 ? (
+          {bookingsFormatted.length > 0 ? (
             <div className="flex gap-4 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden">
-              {confirmedBookingsFormatted.map((booking) => (
+              {bookingsFormatted.map((booking) => (
                 <BookingItem key={booking.id} booking={booking} />
               ))}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Você não possui agendamentos confirmados.
-            </p>
-          )}
-        </div>
-
-        {/* =================================================
-            FINALIZADOS
-        ================================================= */}
-
-        <div className="mt-8">
-          <h2 className="mb-3 text-xs font-bold uppercase text-muted-foreground">
-            Finalizados
-          </h2>
-
-          {concludedBookingsFormatted.length > 0 ? (
-            <div className="flex gap-4 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden">
-              {concludedBookingsFormatted.map((booking) => (
-                <BookingItem key={booking.id} booking={booking} />
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Nenhum agendamento finalizado.
+              Você não possui agendamentos.
             </p>
           )}
         </div>
