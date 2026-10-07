@@ -351,7 +351,7 @@ export const createBooking = async ({
       },
 
       status: {
-        not: "CANCELLED",
+        in: ["PENDING", "CONFIRMED"],
       },
     },
   });

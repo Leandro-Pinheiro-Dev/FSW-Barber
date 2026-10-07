@@ -38,7 +38,7 @@ export async function getBookings({ date }: GetBookingsProps) {
       },
 
       status: {
-        not: "CANCELLED",
+        in: ["PENDING", "CONFIRMED"],
       },
     },
 

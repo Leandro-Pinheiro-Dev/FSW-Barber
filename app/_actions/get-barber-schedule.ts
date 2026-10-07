@@ -129,7 +129,7 @@ export const getBarberSchedule = async (
       },
 
       status: {
-        not: "CANCELLED",
+        in: ["PENDING", "CONFIRMED"],
       },
     },
 
