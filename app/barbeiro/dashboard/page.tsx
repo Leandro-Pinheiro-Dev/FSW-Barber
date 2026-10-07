@@ -1,18 +1,29 @@
 import { getServerSession } from "next-auth";
+
 import { redirect } from "next/navigation";
 
 import { authOptions } from "@/lib/auth";
+
 import { db } from "@/lib/prisma";
 
 import MonthlyHistory from "./_components/monthly-history";
+
 import EditServiceButton from "./_components/edit-service-button";
+
 import EditBookingButton from "./_components/edit-booking-button";
+
 import DeleteBookingButton from "./_components/delete-booking-button";
+
 import CreateBookingButton from "./_components/create-booking-button";
+
 import BarberSchedule from "./_components/barber-schedule";
+
 import BookingStatusButton from "./_components/booking-status-button";
+
 import BusinessScheduleSettings from "./_components/business-schedule-settings";
+
 import CustomerDebts from "./_components/customer-debts";
+
 import LogoutButton from "./_components/logout-button";
 
 import EnablePushNotifications from "@/app/_components/enable-push-notifications";
@@ -78,6 +89,22 @@ const BarberDashboardPage = async () => {
   // =====================================================
 
   const bookingsData = await db.booking.findMany({
+    // Somente agendamentos operacionais devem aparecer
+    // na agenda do barbeiro.
+    //
+    // PENDING    -> aparece
+    // CONFIRMED  -> aparece
+    // COMPLETED  -> não aparece
+    // CANCELLED  -> não aparece
+    //
+    // Os registros COMPLETED continuam salvos no banco
+    // para histórico, financeiro e avaliações.
+    where: {
+      status: {
+        in: ["PENDING", "CONFIRMED"],
+      },
+    },
+
     include: {
       user: true,
 
@@ -358,9 +385,10 @@ const BarberDashboardPage = async () => {
             </div>
           </div>
         </section>
+
         {/* =================================================
-                  HISTÓRICO FINANCEIRO MENSAL
-             ================================================= */}
+            HISTÓRICO FINANCEIRO MENSAL
+        ================================================= */}
 
         <MonthlyHistory />
 
@@ -398,6 +426,7 @@ const BarberDashboardPage = async () => {
             ))}
           </div>
         </section>
+
         {/* =================================================
             CONFIGURAÇÃO DA AGENDA
         ================================================= */}
@@ -608,4 +637,5 @@ const BarberDashboardPage = async () => {
     </main>
   );
 };
+
 export default BarberDashboardPage;
