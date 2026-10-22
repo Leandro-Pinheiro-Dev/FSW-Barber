@@ -126,11 +126,6 @@ async function seedDatabase() {
         time: "09:00",
       },
       {
-        clientName: "Dada",
-        dayOfWeek: 4,
-        time: "11:00",
-      },
-      {
         clientName: "Ricardo",
         dayOfWeek: 4,
         time: "18:00",
@@ -203,11 +198,6 @@ async function seedDatabase() {
         clientName: "Peterson",
         dayOfWeek: 6,
         time: "13:00",
-      },
-      {
-        clientName: "Ronaldo",
-        dayOfWeek: 6,
-        time: "15:00",
       },
       {
         clientName: "Zaca",
